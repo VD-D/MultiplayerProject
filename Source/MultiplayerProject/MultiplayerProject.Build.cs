@@ -18,7 +18,10 @@ public class MultiplayerProject : ModuleRules
 			"OnlineSubsystem",
 			"OnlineSubsystemUtils",
 			"Slate",
-			"SlateCore"
+			"SlateCore",
+			"EngineSettings",
+			"GameplayAbilities", 
+			"GameplayTags"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

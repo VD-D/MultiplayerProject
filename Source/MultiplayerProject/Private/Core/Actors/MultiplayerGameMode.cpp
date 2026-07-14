@@ -10,6 +10,7 @@
 #include "Shared/Subsystems/SessionSubsystem.h"
 
 /* Engine includes. */
+#include "Game/Actors/GameManager.h"
 #include "GameFramework/PlayerController.h"
 #include "Shared/Libraries/MultiplayerLibrary.h"
 
@@ -30,7 +31,27 @@ AMultiplayerGameMode* AMultiplayerGameMode::GetMultiplayerGameMode(const UObject
 	return nullptr;
 }
 
-void AMultiplayerGameMode::BeginGame() const
+TSubclassOf<AHunterCharacter> AMultiplayerGameMode::GetHunterCharacterClass(const UObject* WorldContextObject)
+{
+	if (AMultiplayerGameMode* GameMode = GetMultiplayerGameMode(WorldContextObject))
+	{
+		return GameMode->HunterCharacterClass;
+	}
+
+	return nullptr;
+}
+
+TSubclassOf<APropCharacter> AMultiplayerGameMode::GetPropCharacterClass(const UObject* WorldContextObject)
+{
+	if (AMultiplayerGameMode* GameMode = GetMultiplayerGameMode(WorldContextObject))
+	{
+		return GameMode->PropCharacterClass;
+	}
+
+	return nullptr;
+}
+
+void AMultiplayerGameMode::SeverTravelToGameLevel() const
 {
 	if (IsValid(GetWorld()))
 	{
@@ -39,28 +60,58 @@ void AMultiplayerGameMode::BeginGame() const
 	}
 }
 
+bool AMultiplayerGameMode::TryToStartGame()
+{
+	const FOnlineSessionSettings Settings = USessionSubsystem::GetSessionSettings(this);
+	const int32 MaxNumPlayers = Settings.NumPublicConnections;
+	const int32 CurrentNumPlayers = UMultiplayerLibrary::GetNumPlayers(this);
+
+	if (UMultiplayerSettings::GetEnableOptionalLogging())
+	{
+		ULogging::LogMessageToConsole(FString::Printf(TEXT("Tried to start game with %d players out of %d players."), CurrentNumPlayers, MaxNumPlayers));
+	}
+
+	if (MaxNumPlayers > 0 && CurrentNumPlayers == MaxNumPlayers && !IsValid(GameManagerInstance))
+	{
+		GameManagerInstance = AGameManager::CreateInstance(this, GameManagerClass);
+		return true;
+	}
+	
+	return false;
+}
+
 void AMultiplayerGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
 
-	if (IsValid(GetWorld()))
-	{
-		if (const AMultiplayerGameState* MultiplayerGameState = GetWorld()->GetGameState<AMultiplayerGameState>(); IsValid(MultiplayerGameState))
-		{
-			const FOnlineSessionSettings Settings = USessionSubsystem::GetSessionSettings(this);
-			const int32 MaxNumPlayers = Settings.NumPublicConnections;
-			const int32 CurrentNumPlayers = UMultiplayerLibrary::GetNumPlayers(this);
+	const FOnlineSessionSettings Settings = USessionSubsystem::GetSessionSettings(this);
+	const int32 MaxNumPlayers = Settings.NumPublicConnections;
+	const int32 CurrentNumPlayers = UMultiplayerLibrary::GetNumPlayers(this);
 
-			if (UMultiplayerSettings::GetEnableOptionalLogging())
-			{
-				ULogging::LogMessageToConsole(FString::Printf(TEXT("A new player logged in. There are now %d players out of %d players."), CurrentNumPlayers, MaxNumPlayers));
-			}
+	if (UMultiplayerSettings::GetEnableOptionalLogging())
+	{
+		ULogging::LogMessageToConsole(FString::Printf(TEXT("A new player connected. There are now %d players out of %d players."), CurrentNumPlayers, MaxNumPlayers));
+	}
 			
-			MultiplayerGameState->BroadcastPlayerConnected(NewPlayer, CurrentNumPlayers, MaxNumPlayers);
-		}
-		else
+	OnPlayerConnected.Broadcast(NewPlayer, CurrentNumPlayers, MaxNumPlayers);
+}
+
+void AMultiplayerGameMode::Logout(AController* Exiting)
+{
+	Super::Logout(Exiting);
+
+	if (APlayerController* PlayerController = Cast<APlayerController>(Exiting))
+	{
+		const FOnlineSessionSettings Settings = USessionSubsystem::GetSessionSettings(this);
+		const int32 MaxNumPlayers = Settings.NumPublicConnections;
+		const int32 CurrentNumPlayers = UMultiplayerLibrary::GetNumPlayers(this) - 1;
+		// Note: we have -1 as Logout is called before the controller is actually destroyed, so there is actually one less player.
+
+		if (UMultiplayerSettings::GetEnableOptionalLogging())
 		{
-			ULogging::LogVerboseError(GetName(), "AMultiplayerGameMode::PostLogin", "Game state is not AMultiplayerGameState!");
+			ULogging::LogMessageToConsole(FString::Printf(TEXT("A player disconnected. There are now %d players out of %d players."), CurrentNumPlayers, MaxNumPlayers));
 		}
+		
+		OnPlayerConnected.Broadcast(PlayerController, CurrentNumPlayers, MaxNumPlayers);
 	}
 }

@@ -33,7 +33,7 @@ public:
 	explicit UDestroySessionProxy(const FObjectInitializer& ObjectInitializer);
 	
 	/**
-	 * Attempts to destroy the existing session. For clients, this disconnects them. For servers, it ends the game.
+	 * Attempts to destroy the existing session.
 	 * @param PlayerController Player controller searching for sessions.
 	 * @param OnSessionDestroyed Callback after session is destroyed.
 	 * @return Newly created DestroySessionProxy instance.

@@ -18,6 +18,16 @@ enum class EViewportWidget : uint8
 };
 #pragma endregion UI
 
+#pragma region Game
+UENUM(BlueprintType)
+enum class ERoleType : uint8
+{
+	Hunter  UMETA(DisplayName = "Hunter"),
+	Prop    UMETA(DisplayName = "Prop"),
+	Unknown UMETA(DisplayName = "Unknown")
+};
+#pragma endregion Game
+
 /**
  * Enums shared across classes.
  */

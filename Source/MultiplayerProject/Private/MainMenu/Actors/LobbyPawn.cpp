@@ -4,15 +4,19 @@
 #include "MainMenu/Actors/LobbyPawn.h"
 
 /* Project includes. */
+#include "Core/Actors/MultiplayerGameMode.h"
 #include "Core/Settings/MultiplayerSettings.h"
 #include "MainMenu/UI/LobbyWidget.h"
 #include "Shared/Libraries/Logging.h"
 #include "Shared/Libraries/MultiplayerLibrary.h"
-#include "Shared/Subsystems/SessionSubsystem.h"
 #include "Shared/Subsystems/UIManager.h"
+#include "Shared/Subsystems/SessionSubsystem.h"
 
 /* Engine includes. */
+#include "EngineUtils.h"
 #include "Camera/CameraComponent.h"
+#include "GameFramework/PlayerState.h"
+#include "Net/UnrealNetwork.h"
 
 ALobbyPawn::ALobbyPawn()
 {
@@ -26,35 +30,104 @@ void ALobbyPawn::BeginPlay()
 
 	if (HasAuthority())
 	{
-		const FOnlineSessionSettings Settings = USessionSubsystem::GetSessionSettings(this);
-		const int32 MaxNumPlayers = Settings.NumPublicConnections;
-		const int32 CurrentNumPlayers = UMultiplayerLibrary::GetNumPlayers(this);
-		RequestLoadLobbyWidget(CurrentNumPlayers, MaxNumPlayers);
+		if (AMultiplayerGameMode* MultiplayerGameMode = AMultiplayerGameMode::GetMultiplayerGameMode(this); IsValid(MultiplayerGameMode))
+		{
+			MultiplayerGameMode->OnPlayerConnected.AddDynamic(this, &ALobbyPawn::OnPlayerConnected);
+			MultiplayerGameMode->OnPlayerDisconnected.AddDynamic(this, &ALobbyPawn::OnPlayerDisconnected);
+		}
 	}
 }
 
-void ALobbyPawn::RequestLoadLobbyWidget_Implementation(int32 CurrentNumPlayers, int32 MaxNumPlayers)
+void ALobbyPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	UUIManager::LoadViewportWidget(this, EViewportWidget::Lobby, FOnWidgetLoaded::CreateLambda([CurrentNumPlayers, MaxNumPlayers](UUserWidget* UserWidget)
+	UUIManager::RemoveViewportWidget(this, EViewportWidget::Lobby);
+	Super::EndPlay(EndPlayReason);
+}
+
+void ALobbyPawn::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	const FOnlineSessionSettings Settings = USessionSubsystem::GetSessionSettings(this);
+	MaximumNumberPlayers = Settings.NumPublicConnections;
+	CurrentNumberPlayers = UMultiplayerLibrary::GetNumPlayers(this);
+
+	if (UMultiplayerSettings::GetEnableOptionalLogging())
+	{
+		ULogging::LogMessageToConsole(FString::Printf(TEXT("ALobby::PossessedBy: found %d/%d players"), CurrentNumberPlayers, MaximumNumberPlayers));
+	}
+	
+	OnPossessedClient();
+}
+
+void ALobbyPawn::OnPossessedClient_Implementation()
+{
+	const int32 CurrentNumPlayers = CurrentNumberPlayers;
+	const int32 MaxNumPlayers = MaximumNumberPlayers;
+	
+	UpdatePlayerNames();
+	TArray<FString> CurrentPlayerNames = PlayerNames;
+	
+	UUIManager::LoadViewportWidget(this, EViewportWidget::Lobby, FOnWidgetLoaded::CreateLambda([CurrentPlayerNames, CurrentNumPlayers, MaxNumPlayers](UUserWidget* UserWidget)
 	{
 		if (ULobbyWidget* LobbyWidget = Cast<ULobbyWidget>(UserWidget))
 		{
-			LobbyWidget->RefreshLobbyWidgetDisplay(CurrentNumPlayers, MaxNumPlayers);
+			LobbyWidget->RefreshPlayerList(CurrentPlayerNames);
+			LobbyWidget->RefreshCurrentNumPlayersDisplay(CurrentNumPlayers);
+			LobbyWidget->RefreshMaxNumPlayersDisplay(MaxNumPlayers);
 		}
 	}));
 }
 
-void ALobbyPawn::OnPlayerConnected_Implementation(APlayerController* NewController, int32 CurrentNumPlayers, int32 MaxNumPlayers)
+void ALobbyPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
-	/*
-	if (HasAuthority())
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(ALobbyPawn, CurrentNumberPlayers);
+	DOREPLIFETIME(ALobbyPawn, MaximumNumberPlayers);
+	DOREPLIFETIME(ALobbyPawn, PlayerNames);
+}
+
+void ALobbyPawn::OnRep_CurrentNumberPlayers()
+{
+	if (ULobbyWidget* LobbyWidget = Cast<ULobbyWidget>(UUIManager::GetLoadedWidget(this, EViewportWidget::Lobby)))
 	{
-		if (ULobbyWidget* LobbyWidget = Cast<ULobbyWidget>(UUIManager::GetLoadedWidget(this, EViewportWidget::Lobby)))
-		{
-			LobbyWidget->RefreshLobbyWidgetDisplay();
-		}
+		LobbyWidget->RefreshCurrentNumPlayersDisplay(CurrentNumberPlayers);
 	}
-	else*/
+}
+
+void ALobbyPawn::OnRep_MaxNumberPlayers()
+{
+	if (ULobbyWidget* LobbyWidget = Cast<ULobbyWidget>(UUIManager::GetLoadedWidget(this, EViewportWidget::Lobby)))
+	{
+		LobbyWidget->RefreshMaxNumPlayersDisplay(MaximumNumberPlayers);
+	}
+}
+
+void ALobbyPawn::OnRep_PlayerNames()
+{
+	if (ULobbyWidget* LobbyWidget = Cast<ULobbyWidget>(UUIManager::GetLoadedWidget(this, EViewportWidget::Lobby)))
+	{
+		LobbyWidget->RefreshPlayerList(PlayerNames);
+	}
+}
+
+void ALobbyPawn::UpdatePlayerNames()
+{
+	TArray<FString> NewPlayerNames;
+	for (TActorIterator<ALobbyPawn> ActorIterator(GetWorld()); ActorIterator; ++ActorIterator)
+	{
+		const ALobbyPawn* LobbyPawn = *ActorIterator;
+		if (!IsValid(LobbyPawn)) continue;
+
+		NewPlayerNames.Add(IsValid(LobbyPawn->GetPlayerState()) ? LobbyPawn->GetPlayerState()->GetPlayerName() : FString("INVALID_NAME"));
+	}
+
+	PlayerNames = NewPlayerNames;
+}
+
+void ALobbyPawn::OnPlayerConnected(APlayerController* NewController, int32 CurrentNumPlayers, int32 MaxNumPlayers)
+{
 	if (UMultiplayerSettings::GetEnableOptionalLogging())
 	{
 		ULogging::LogMessageToConsole(FString::Printf(TEXT("%s connected... (%d/%d players)"), *NewController->GetName(), CurrentNumPlayers, MaxNumPlayers));
@@ -62,14 +135,39 @@ void ALobbyPawn::OnPlayerConnected_Implementation(APlayerController* NewControll
 	
 	if (HasAuthority())
 	{
-		RequestLobbyWidgetUpdate(CurrentNumPlayers, MaxNumPlayers);
+		CurrentNumberPlayers = CurrentNumPlayers;
+		MaximumNumberPlayers = MaxNumPlayers;
+		UpdatePlayerNames();
+		OnRep_CurrentNumberPlayers();
+		OnRep_MaxNumberPlayers();
+		OnRep_PlayerNames();
+
+		if (ULobbyWidget* LobbyWidget = Cast<ULobbyWidget>(UUIManager::GetLoadedWidget(this, EViewportWidget::Lobby)))
+		{
+			LobbyWidget->SetStartGameButtonVisibility(CurrentNumberPlayers == MaximumNumberPlayers);
+		}
 	}
 }
 
-void ALobbyPawn::RequestLobbyWidgetUpdate_Implementation(int32 CurrentNumPlayers, int32 MaxNumPlayers)
+void ALobbyPawn::OnPlayerDisconnected(APlayerController* OldController, int32 CurrentNumPlayers, int32 MaxNumPlayers)
 {
-	if (ULobbyWidget* LobbyWidget = Cast<ULobbyWidget>(UUIManager::GetLoadedWidget(this, EViewportWidget::Lobby)))
+	if (UMultiplayerSettings::GetEnableOptionalLogging())
 	{
-		LobbyWidget->RefreshLobbyWidgetDisplay(CurrentNumPlayers, MaxNumPlayers);
+		ULogging::LogMessageToConsole(FString::Printf(TEXT("%s connected... (%d/%d players)"), *GetNameSafe(OldController), CurrentNumPlayers, MaxNumPlayers));
+	}
+	
+	if (HasAuthority())
+	{
+		CurrentNumberPlayers = CurrentNumPlayers;
+		MaximumNumberPlayers = MaxNumPlayers;
+		UpdatePlayerNames();
+		OnRep_CurrentNumberPlayers();
+		OnRep_MaxNumberPlayers();
+		OnRep_PlayerNames();
+
+		if (ULobbyWidget* LobbyWidget = Cast<ULobbyWidget>(UUIManager::GetLoadedWidget(this, EViewportWidget::Lobby)))
+		{
+			LobbyWidget->SetStartGameButtonVisibility(CurrentNumberPlayers == MaximumNumberPlayers);
+		}
 	}
 }

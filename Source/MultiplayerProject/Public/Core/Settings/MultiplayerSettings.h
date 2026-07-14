@@ -8,6 +8,13 @@
 #include "Shared/Types/SharedStructs.h"
 #include "MultiplayerSettings.generated.h"
 
+UENUM(BlueprintType)
+enum class EStartPreference : uint8
+{
+	PlayerStarts UMETA(DisplayName = "Player Starts"),
+	CustomStarts UMETA(DisplayName = "Hunter-Prop Starts")
+};
+
 USTRUCT(BlueprintType)
 struct FPlayerRatio
 {
@@ -103,6 +110,12 @@ protected:
 	/* How many props there should be per hunter. */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Game")
 	FPlayerRatio HunterToPropRatio;
+
+	/* Whether players should start on default player starts or on custom starts. Custom starts should ALWAYS be used
+	 * for the actual game; this option here is for debugging purposes.
+	 */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Game")
+	EStartPreference PlayerStartPreference;
 #pragma endregion Game
 
 #pragma region Accessors
@@ -213,5 +226,11 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Multiplayer Settings")
 	static int32 GetTotalPlayerNum();
+
+	/**
+	 * @return Where we prefer players to start.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Settings")
+	static EStartPreference GetPlayerStartPreference();
 #pragma endregion Accessors
 };

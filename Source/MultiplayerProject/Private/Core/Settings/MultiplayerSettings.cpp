@@ -115,3 +115,9 @@ int32 UMultiplayerSettings::GetTotalPlayerNum()
     if (const UMultiplayerSettings* Settings = GetGenericSettings()) return Settings->HunterToPropRatio.GetTotal();
     return 2;
 }
+
+EStartPreference UMultiplayerSettings::GetPlayerStartPreference()
+{
+    if (const UMultiplayerSettings* Settings = GetGenericSettings()) return Settings->PlayerStartPreference;
+    return EStartPreference::CustomStarts;
+}
