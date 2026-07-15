@@ -4,11 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Shared/Types/SharedDelegates.h"
 #include "Shared/Types/SharedEnums.h"
 #include "GameManager.generated.h"
 
 class AHunterPropStart;
 class APlayerStart;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGamePhaseUpdated, EGamePhase, NewPhase);
 
 /**
  * Actor which is responsible for storing game states which should be replicated to clients and also
@@ -18,6 +21,26 @@ UCLASS(NotPlaceable, BlueprintType, Blueprintable, Transient, hideCategories = (
 class MULTIPLAYERPROJECT_API AGameManager : public AActor
 {
 	GENERATED_BODY()
+#pragma region Interal
+public:
+	UPROPERTY(BlueprintAssignable, Category = "Game Manager")
+	FOnFloatPropertyChanged OnCountdownTimeTick;
+
+	UPROPERTY(BlueprintAssignable, Category = "Game Manager")
+	FOnGamePhaseUpdated OnGamePhaseUpdated;
+	
+protected:
+	/* This variable is updated periodically via the timer bound to CountdownTimeTimerHandle (this is to prevent the GamePhaseTimerHandle timer's time replicating on tick). */
+	UPROPERTY(ReplicatedUsing=OnRep_CountdownTime)
+	float CountdownTime;
+
+	UPROPERTY(ReplicatedUsing=OnRep_CurrentGamePhase)
+	EGamePhase CurrentGamePhase;
+	
+	FTimerHandle CountdownTimeTimerHandle;
+	FTimerHandle GamePhaseTimerHandle;
+#pragma endregion Interal
+	
 #pragma region Construction
 public:
 	/**
@@ -39,6 +62,14 @@ public:
 	 */
 	void AssignRolesAndPossessControllers();
 #pragma endregion Construction
+
+#pragma region Accessors
+	UFUNCTION(BlueprintPure, Category = "Game Manager")
+	float GetCountdownTime() const { return CountdownTime; }
+
+	UFUNCTION(BlueprintPure, Category = "Game Manager")
+	EGamePhase GetCurrentGamePhase() const { return CurrentGamePhase; }
+#pragma endregion Accessors
 
 #pragma region Utility
 	/**
@@ -73,4 +104,46 @@ private:
 	 */
 	FTransform GetSpawnTransformFromHunterPropStart(ERoleType RoleType, TArray<AHunterPropStart*>& HunterPropStarts) const;
 #pragma endregion Utility
+
+#pragma region Timer
+protected:
+	/**
+	 * Starts the timer for the current phase.
+	 */
+	void BeginTimerForPhase();
+
+	/**
+	 * Sets countdown time to server time.
+	 */
+	UFUNCTION()
+	void UpdateCountdownTime();
+
+	/**
+	 * Advances phase and re-initialises time.
+	 */
+	UFUNCTION()
+	void OnTimerForPhaseEnded();
+
+	/**
+	 * Disconnects local client - because this is only called on the host, this will disconnect everyone.
+	 */
+	UFUNCTION(Client, Reliable)
+	void EndGameSession();
+#pragma endregion Timer
+
+#pragma region Replication
+public:
+	/**
+	 * Replicates properties.
+	 * @param OutLifetimeProps Unused.
+	 */
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+private:
+	UFUNCTION()
+	void OnRep_CountdownTime();
+
+	UFUNCTION()
+	void OnRep_CurrentGamePhase();
+#pragma endregion Replication
 };

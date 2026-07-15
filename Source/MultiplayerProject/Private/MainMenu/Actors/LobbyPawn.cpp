@@ -62,6 +62,13 @@ void ALobbyPawn::PossessedBy(AController* NewController)
 
 void ALobbyPawn::OnPossessedClient_Implementation()
 {
+	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()); IsValid(PlayerController))
+	{
+		const FInputModeUIOnly InputMode;
+		PlayerController->SetInputMode(InputMode);
+		PlayerController->bShowMouseCursor = true;
+	}
+	
 	const int32 CurrentNumPlayers = CurrentNumberPlayers;
 	const int32 MaxNumPlayers = MaximumNumberPlayers;
 	

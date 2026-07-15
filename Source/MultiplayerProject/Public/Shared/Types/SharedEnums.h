@@ -26,6 +26,14 @@ enum class ERoleType : uint8
 	Prop    UMETA(DisplayName = "Prop"),
 	Unknown UMETA(DisplayName = "Unknown")
 };
+
+UENUM(BlueprintType)
+enum class EGamePhase : uint8
+{
+	GameCountdown = 0 UMETA(DisplayName = "Game Countdown"),
+	InGame        = 1 UMETA(DisplayName = "In Game"),
+	Scoreboard    = 2 UMETA(DisplayName = "Scoreboard")
+};
 #pragma endregion Game
 
 /**

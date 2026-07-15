@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "AbilitySystemInterface.h"
 #include "GameFramework/Character.h"
+#include "Shared/Types/SharedEnums.h"
 #include "MultiplayerGameCharacter.generated.h"
 
 class UCameraComponent;
@@ -18,12 +19,9 @@ struct FInputActionInstance;
 
 /* Defines a pair of an input action and an ability. */
 USTRUCT(BlueprintType)
-struct FAbilityInputMapping
+struct FAbilityToID
 {
 	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TObjectPtr<UInputAction> InputAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TSubclassOf<UGameplayAbility> Ability;
@@ -54,21 +52,18 @@ protected:
 #pragma endregion Components
 
 #pragma region Config
-	/* Mapping Context for player input. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
-	TObjectPtr<UInputMappingContext> InputMappingContext;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Components")
+	TArray<FAbilityToID> AbilityToIDs;
 
-	/* Input action driving movement. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
-	TObjectPtr<UInputAction> MovementInputAction;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Components")
+	float MaxTraceDistance;
 
-	/* Input action camera look. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
-	TObjectPtr<UInputAction> CameraInputAction;
-
-	/* Input actions enabling usage of gameplay abilities. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
-	TArray<FAbilityInputMapping> AbilityActions;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Components")
+	TEnumAsByte<ECollisionChannel> TraceCollisionChannel;
+private:
+	/* The last actor we have targeted. */
+	UPROPERTY()
+	TObjectPtr<AActor> CurrentTarget;
 #pragma endregion Config
 
 #pragma region AbilitySystemInterface
@@ -86,6 +81,12 @@ public:
 	 */
 	AMultiplayerGameCharacter();
 
+	/**
+	 * Does trace and updates current target.
+	 * @param DeltaTime Unused.
+	 */
+	virtual void Tick(float DeltaTime) override;
+
 protected:
 	/**
 	 * TODO: Is BeginPlay needed?
@@ -93,49 +94,53 @@ protected:
 	virtual void BeginPlay() override;
 
 	/**
+	 * Removes GameHUD from viewport.
+	 * @param EndPlayReason Unused.
+	 */
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	/**
 	 * Grants abilities and configures UI on owning client.
 	 * @param NewController Unused.
 	 */
 	virtual void PossessedBy(AController* NewController) override;
 
-public:	
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
+	UFUNCTION(Client, Reliable)
+	void OnCharacterPossessedClient();
 
-	/**
-	 * Configures player input component for player.
-	 * @param PlayerInputComponent Adds input bindings.
-	 */
-	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	UFUNCTION()
+	void TryInitHUDTimeFromGameManager();
+
+	UFUNCTION()
+	void OnGameTimeUpdate(float NewTime);
+
+	UFUNCTION()
+	void OnGamePhaseUpdated(EGamePhase NewGamePhase);
 #pragma endregion Construction
 
-#pragma region Input
+#pragma region Accessors
+public:
 	/**
-	 * Enables WASD movement for this combat vehicle.
-	 * @param Instance Should be a vector 2D.
+	 * @return Target we are looking at.
 	 */
-	UFUNCTION()
-	void MovementInput(const FInputActionInstance& Instance);
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Game Character")
+	AActor* GetCurrentTarget() const { return CurrentTarget; }
+#pragma endregion Accessors
+
+#pragma region Targeting
+protected:
+	/**
+	 * Performs the line trace necessary for targeting.
+	 */
+	void DoTargeting();
 
 	/**
-	 * Attempts to interact with whatever is at the top of the interact stack.
-	 * @param Instance Unused.
+	 * Sets the target's static and skeletal mesh components highlighted (simply renders them in custom depth).
+	 * This is only assuming the target does not exceed the max size, as set in settings.
+	 * @param Target Target we want to highlight.
+	 * @param bShouldHighlight Whether we want to turn highlights on or off.
 	 */
-	UFUNCTION()
-	void CameraLook(const FInputActionInstance& Instance);
-
-	/**
-	 * Informs ability system component an ability with a given id has been pressed.
-	 * @param InputID Passed to ability system component
-	 */
-	UFUNCTION()
-	void OnAbilityInputPressed(int32 InputID);
-
-	/**
-	 * Informs ability system component an ability with a given id has been released.
-	 * @param InputID Passed to ability system component
-	 */
-	UFUNCTION()
-	void OnAbilityInputReleased(int32 InputID);
-#pragma endregion Input
+	//UFUNCTION(Client, Reliable)
+	void SetHighlightTarget(const AActor* Target, bool bShouldHighlight);
+#pragma endregion Targeting
 };

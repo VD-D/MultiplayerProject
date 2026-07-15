@@ -4,19 +4,33 @@
 #include "Core/Actors/MultiplayerGameMode.h"
 
 /* Project includes. */
+#include "Core/Actors/MultiplayerGameController.h"
 #include "Core/Actors/MultiplayerGameState.h"
+#include "Game/Actors/GameManager.h"
+#include "Game/Actors/HunterCharacter.h"
+#include "Game/Actors/PropCharacter.h"
 #include "Core/Settings/MultiplayerSettings.h"
 #include "Shared/Libraries/Logging.h"
+#include "Shared/Libraries/MultiplayerLibrary.h"
 #include "Shared/Subsystems/SessionSubsystem.h"
 
 /* Engine includes. */
-#include "Game/Actors/GameManager.h"
 #include "GameFramework/PlayerController.h"
-#include "Shared/Libraries/MultiplayerLibrary.h"
 
 AMultiplayerGameMode::AMultiplayerGameMode()
 {
 	bUseSeamlessTravel = true;
+}
+
+UClass* AMultiplayerGameMode::GetDefaultPawnClassForController_Implementation(AController* Controller)
+{
+	if (const AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(Controller))
+	{
+		if (GameController->GetRoleType() == ERoleType::Hunter) return HunterCharacterClass;
+		if (GameController->GetRoleType() == ERoleType::Prop) return PropCharacterClass;
+	}
+
+	return DefaultPawnClass;
 }
 
 AMultiplayerGameMode* AMultiplayerGameMode::GetMultiplayerGameMode(const UObject* WorldContextObject)

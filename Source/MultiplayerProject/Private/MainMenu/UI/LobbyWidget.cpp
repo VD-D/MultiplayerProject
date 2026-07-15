@@ -11,12 +11,9 @@
 #include "Shared/Libraries/MultiplayerLibrary.h"
 
 /* Engine includes. */
-#include "GameMapsSettings.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
-#include "Kismet/GameplayStatics.h"
-#include "Shared/Subsystems/SessionSubsystem.h"
 
 void ULobbyWidget::RefreshPlayerList(const TArray<FString>& PlayerNames)
 {
@@ -104,24 +101,5 @@ void ULobbyWidget::OnLeaveGameButtonClicked()
 {
 	// Noting here that if the host disconnects, Unreal Engine's default disconnection handling kicks in and all clients are booted to the main menu.
 	// Otherwise, the client just disconnects locally.
-	if (APlayerController* LocalController = UMultiplayerLibrary::GetLocalPlayerController(this); IsValid(LocalController))
-	{
-		TWeakObjectPtr WeakLocalPlayer = LocalController;
-		USessionSubsystem::DestroySession(LocalController, FOnSessionDestroyed::CreateLambda([WeakLocalPlayer](bool bSuccess, const FName& SessionName)
-		{
-			const FString& GameDefaultMapName = UGameMapsSettings::GetGameDefaultMap(); 
-			if (UMultiplayerSettings::GetEnableOptionalLogging())
-			{
-				const FString& SuccessString = bSuccess ? "left" : "did not leave";
-				ULogging::LogMessageToConsole(FString::Printf(TEXT("Player %s the session called %s"), *SuccessString, *SessionName.ToString()));
-
-				if (bSuccess) ULogging::LogMessageToConsole(FString::Printf(TEXT("Returning to %s"), *GameDefaultMapName));
-			}
-
-			if (bSuccess && WeakLocalPlayer.IsValid())
-			{
-				UGameplayStatics::OpenLevel(WeakLocalPlayer.Get(), FName(*GameDefaultMapName));
-			}
-		}));
-	}
+	UMultiplayerLibrary::DisconnectLocalPlayer(this);
 }

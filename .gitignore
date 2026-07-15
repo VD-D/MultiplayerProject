@@ -110,3 +110,5 @@ DerivedDataCache/*
 
 # Developer only files
 /Content/Developers/*
+/Content/Beam_and_laserFX01/*
+/Content/RobotRecon/*

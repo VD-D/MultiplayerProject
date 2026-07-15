@@ -39,9 +39,11 @@ public:
 	TSubclassOf<APropCharacter> PropCharacterClass;
 	
 private:
+	friend class AGameManager;
+	
 	/* Game manager. If this is valid, the game is in progress. */
 	UPROPERTY()
-	TObjectPtr<AActor> GameManagerInstance;
+	TObjectPtr<AGameManager> GameManagerInstance;
 #pragma endregion Internal
 	
 #pragma region Construction
@@ -50,6 +52,13 @@ public:
 	 * Default constructor.
 	 */
 	AMultiplayerGameMode();
+
+	/**
+	 * Gets appropriate class for pawn.
+	 * @param Controller Cast to multiplayer game controller.
+	 * @return Hunter or prop class, or default if the role is neither.
+	 */
+	virtual UClass* GetDefaultPawnClassForController_Implementation(AController* Controller) override;
 #pragma endregion Construction
 
 #pragma region Accessors

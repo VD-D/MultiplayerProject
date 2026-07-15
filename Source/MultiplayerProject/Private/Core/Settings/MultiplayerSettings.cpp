@@ -5,6 +5,13 @@
 
 int32 UMultiplayerSettings::MaxSessionToFindPerSearch = 50;
 
+UMultiplayerSettings::UMultiplayerSettings()
+{
+    GamePhaseDuration.Emplace(EGamePhase::GameCountdown, 5.0f);
+    GamePhaseDuration.Emplace(EGamePhase::InGame, 360.0f);
+    GamePhaseDuration.Emplace(EGamePhase::Scoreboard, 10.0f);
+}
+
 const UMultiplayerSettings* UMultiplayerSettings::GetGenericSettings()
 {
     return GetDefault<UMultiplayerSettings>();
@@ -120,4 +127,29 @@ EStartPreference UMultiplayerSettings::GetPlayerStartPreference()
 {
     if (const UMultiplayerSettings* Settings = GetGenericSettings()) return Settings->PlayerStartPreference;
     return EStartPreference::CustomStarts;
+}
+
+float UMultiplayerSettings::GetCountdownTimerUpdateInterval()
+{
+    if (const UMultiplayerSettings* Settings = GetGenericSettings()) return Settings->CountdownTimerUpdateInterval;
+    return 1.0f;
+}
+
+float UMultiplayerSettings::GetGamePhaseDuration(EGamePhase Phase)
+{
+    if (const UMultiplayerSettings* Settings = GetGenericSettings())
+    {
+        if (const float* FoundFloat = Settings->GamePhaseDuration.Find(Phase))
+        {
+            return *FoundFloat;
+        }
+    }
+    
+    return 1.0f;
+}
+
+FVector UMultiplayerSettings::GetMaxTargetableObjectSize()
+{
+    if (const UMultiplayerSettings* Settings = GetGenericSettings()) return Settings->MaxTargetableObjectSize;
+    return FVector::OneVector;
 }

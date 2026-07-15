@@ -7,13 +7,17 @@
 #include "Core/Settings/MultiplayerSettings.h"
 #include "Game/Actors/HunterPropStart.h"
 #include "Shared/Libraries/Logging.h"
+#include "Shared/Libraries/MultiplayerLibrary.h"
 
 /* Engine includes. */
 #include "EngineUtils.h"
+#include "Core/Actors/MultiplayerGameController.h"
 #include "Core/Actors/MultiplayerGameMode.h"
 #include "Game/Actors/HunterCharacter.h"
 #include "Game/Actors/PropCharacter.h"
 #include "GameFramework/PlayerStart.h"
+#include "Net/UnrealNetwork.h"
+#include "Shared/Subsystems/SessionSubsystem.h"
 
 AGameManager::AGameManager()
 {
@@ -41,6 +45,17 @@ AGameManager* AGameManager::CreateInstance(const UObject* WorldContextObject, TS
 void AGameManager::AssignRolesAndPossessControllers()
 {
 	if (!HasAuthority() || !IsValid(GetWorld())) return;
+
+	AMultiplayerGameMode* MultiplayerGameMode = AMultiplayerGameMode::GetMultiplayerGameMode(this);
+	if (!IsValid(MultiplayerGameMode))
+	{
+		ULogging::LogVerboseError(GetName(), "AGameManager::AssignRolesAndPossessControllers", "Game mode is not of type AMultiplayerGameMode!");
+		return;
+	}
+
+	// Step 0. Update game phase.
+	CurrentGamePhase = EGamePhase::GameCountdown;
+	OnRep_CurrentGamePhase();
 
 	// Step 1. Get all controllers and shuffle the resulting controller, to ensure they are in random order.
 	// (This means roles are assigned randomly).
@@ -80,6 +95,7 @@ void AGameManager::AssignRolesAndPossessControllers()
 	TArray<APlayerStart*> PlayerStarts;
 	TArray<AHunterPropStart*> HunterPropStarts;
 	const EStartPreference StartPreference = UMultiplayerSettings::GetPlayerStartPreference();
+	
 
 	ERoleType CurrentRoleType = ERoleType::Hunter;
 	int32 Index = 0;
@@ -89,8 +105,12 @@ void AGameManager::AssignRolesAndPossessControllers()
 	
 	for (const auto PlayerController : Controllers)
 	{
-		// We disable the input, since players should not be able to act until the start countdown timer expires.
-		PlayerController->DisableInput(PlayerController);
+		AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(PlayerController);
+		if (!IsValid(GameController))
+		{
+			ULogging::LogVerboseError(GetName(), "AGameManager::AssignRolesAndPossessControllers", "Found a controller not of type AMultiplayerGameController! Could not assign role!");
+			continue;
+		}
 		
 		// Switch to assigning props once we have assigned all hunters.
 		if (Index == NumHunters && CurrentRoleType == ERoleType::Hunter)
@@ -101,12 +121,20 @@ void AGameManager::AssignRolesAndPossessControllers()
 
 		const FTransform SpawnTransform = StartPreference == EStartPreference::CustomStarts ? GetSpawnTransformFromHunterPropStart(CurrentRoleType, HunterPropStarts) : GetSpawnTransformFromPlayerStart(PlayerStarts);
 		Index += 1;
+
+		/*
+		GameController->SetRoleType(CurrentRoleType);
+		MultiplayerGameMode->RestartPlayer(GameController); //, SpawnTransform);
+		*/
+
 		
 		if (CurrentRoleType == ERoleType::Hunter)
 		{
+			
 			if (AHunterCharacter* HunterCharacter = GetWorld()->SpawnActor<AHunterCharacter>(AMultiplayerGameMode::GetHunterCharacterClass(this), SpawnTransform, SpawnParameters); IsValid(HunterCharacter))
 			{
 				PlayerController->Possess(HunterCharacter);
+				// HunterCharacter->DisableInput(PlayerController); // We disable the input, since players should not be able to act until the start countdown timer expires
 			}
 		}
 		else if (CurrentRoleType == ERoleType::Prop)
@@ -114,9 +142,13 @@ void AGameManager::AssignRolesAndPossessControllers()
 			if (APropCharacter* PropCharacter = GetWorld()->SpawnActor<APropCharacter>(AMultiplayerGameMode::GetPropCharacterClass(this), SpawnTransform, SpawnParameters); IsValid(PropCharacter))
 			{
 				PlayerController->Possess(PropCharacter);
+				// PropCharacter->DisableInput(PlayerController);
 			}
 		}
 	}
+
+	// Step 3. Begin the timer to go from pre-game countdown to in game.
+	BeginTimerForPhase();
 }
 
 AGameManager* AGameManager::GetGameManager(const UObject* WorldContextObject)
@@ -215,4 +247,106 @@ FTransform AGameManager::GetSpawnTransformFromHunterPropStart(ERoleType RoleType
 	}
 	
 	return OutTransform;
+}
+
+void AGameManager::BeginTimerForPhase()
+{
+	if (!HasAuthority() || CountdownTimeTimerHandle.IsValid() || GamePhaseTimerHandle.IsValid()) return;
+
+	FTimerDelegate CountdownDelegate;
+	CountdownDelegate.BindUObject(this, &AGameManager::UpdateCountdownTime);
+
+	FTimerDelegate GamePhaseDelegate;
+	GamePhaseDelegate.BindUObject(this, &AGameManager::OnTimerForPhaseEnded);
+
+	const float CountdownTimeRefreshTime = FMath::Max(UMultiplayerSettings::GetCountdownTimerUpdateInterval(), 1.0f);
+	const float PhaseDuration = FMath::Max(UMultiplayerSettings::GetGamePhaseDuration(CurrentGamePhase), 1.0f);
+
+	CountdownTime = PhaseDuration;
+	OnRep_CountdownTime();
+
+	GetWorldTimerManager().SetTimer(CountdownTimeTimerHandle, CountdownDelegate, CountdownTimeRefreshTime, true);
+	GetWorldTimerManager().SetTimer(GamePhaseTimerHandle, GamePhaseDelegate, PhaseDuration, false);
+}
+
+void AGameManager::UpdateCountdownTime()
+{
+	if (!HasAuthority()) return;
+		
+	CountdownTime = GetWorldTimerManager().GetTimerRemaining(GamePhaseTimerHandle);
+	OnRep_CountdownTime();
+}
+
+void AGameManager::OnTimerForPhaseEnded()
+{
+	if (!HasAuthority()) return;
+	
+	GetWorldTimerManager().ClearTimer(CountdownTimeTimerHandle);
+	GetWorldTimerManager().ClearTimer(GamePhaseTimerHandle);
+
+	CountdownTime = 0.0f;
+	OnRep_CountdownTime();
+
+	if (CurrentGamePhase == EGamePhase::GameCountdown)
+	{
+		CurrentGamePhase = EGamePhase::InGame;
+		OnRep_CurrentGamePhase();
+
+		UMultiplayerLibrary::SetInputEnabledOnAllControllers(this, true);
+	}
+	else if (CurrentGamePhase == EGamePhase::InGame)
+	{
+		CurrentGamePhase = EGamePhase::Scoreboard;
+		OnRep_CurrentGamePhase();
+		
+		for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
+		{
+			if (APlayerController* PlayerController = Iterator->Get(); IsValid(PlayerController))
+			{
+				if (AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(PlayerController); IsValid(GameController))
+				{
+					GameController->SetRoleType(ERoleType::Unknown);
+				}
+			}
+		}
+
+		UMultiplayerLibrary::SetInputEnabledOnAllControllers(this, false);
+	}
+	else
+	{
+		if (AMultiplayerGameMode* MultiplayerGameMode = AMultiplayerGameMode::GetMultiplayerGameMode(this))
+		{
+			MultiplayerGameMode->GameManagerInstance = nullptr;
+		}
+
+		// Because this is only ever called on authority, the "owning client" is the server.
+		// This destroys the session on the server, causing all clients to get booted to the main menu.
+		EndGameSession();
+		return;
+	}
+
+	BeginTimerForPhase();
+}
+
+void AGameManager::EndGameSession_Implementation()
+{
+	UMultiplayerLibrary::DisconnectLocalPlayer(this);
+}
+
+void AGameManager::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AGameManager, CountdownTime);
+	DOREPLIFETIME(AGameManager, CurrentGamePhase);
+}
+
+void AGameManager::OnRep_CountdownTime()
+{
+	OnCountdownTimeTick.Broadcast(CountdownTime);
+}
+
+void AGameManager::OnRep_CurrentGamePhase()
+{
+	OnGamePhaseUpdated.Broadcast(CurrentGamePhase);
 }

@@ -116,10 +116,27 @@ protected:
 	 */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Game")
 	EStartPreference PlayerStartPreference;
+
+	/* How often the countdown timer updates (and therefore begins replication). */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Game")
+	float CountdownTimerUpdateInterval = 1.0f;
+
+	/* How long a given game phase lasts for (in seconds). */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Game")
+	TMap<EGamePhase, float> GamePhaseDuration;
+
+	/* Props can turn into meshes that are max this size. Items only of max this size can be targeted. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Game")
+	FVector MaxTargetableObjectSize = FVector(200.0f, 200.0f, 200.0f);
 #pragma endregion Game
 
 #pragma region Accessors
 public:
+	/**
+	 * Default constructor.
+	 */
+	UMultiplayerSettings();
+	
 	/**
 	 * @return Settings object.
 	 */
@@ -232,5 +249,24 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Multiplayer Settings")
 	static EStartPreference GetPlayerStartPreference();
+
+	/**
+	 * @return How often the countdown time is updated.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Settings")
+	static float GetCountdownTimerUpdateInterval();
+
+	/**
+	 * @param Phase The phase to get total time for.
+	 * @return Total time for given phase.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Settings")
+	static float GetGamePhaseDuration(EGamePhase Phase);
+
+	/**
+	 * @return Max size of targetable meshes.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Settings")
+	static FVector GetMaxTargetableObjectSize();
 #pragma endregion Accessors
 };

@@ -16,6 +16,7 @@ DECLARE_DELEGATE_TwoParams(FOnSessionJoined, EOnJoinSessionCompleteResult::Type 
 DECLARE_DELEGATE_TwoParams(FOnSessionDestroyed, bool bSuccess, const FName& SessionName);
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnIntPropertyChanged, int32, IntProperty);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFloatPropertyChanged, float, FloatProperty);
 
 /**
  * Contains delegates shared across classes.
