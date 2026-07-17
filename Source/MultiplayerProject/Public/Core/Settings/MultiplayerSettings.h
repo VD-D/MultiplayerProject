@@ -128,6 +128,10 @@ protected:
 	/* Props can turn into meshes that are max this size. Items only of max this size can be targeted. */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Game")
 	FVector MaxTargetableObjectSize = FVector(200.0f, 200.0f, 200.0f);
+
+	/* Array of additional meshes which props cannot turn into, even if they are within MaxTargetableObjectSize. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Game")
+	TArray<TSoftObjectPtr<UStaticMesh>> ForbiddenMeshes;
 #pragma endregion Game
 
 #pragma region Accessors
@@ -268,5 +272,12 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Multiplayer Settings")
 	static FVector GetMaxTargetableObjectSize();
+
+	/**
+	 * @param StaticMeshToCheck Mesh to check. 
+	 * @return Whether this mesh is explicitly forbidden.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Settings")
+	static bool GetIsMeshForbidden(UStaticMesh* StaticMeshToCheck);
 #pragma endregion Accessors
 };

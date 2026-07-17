@@ -4,17 +4,23 @@
 #include "Game/Actors/MultiplayerGameCharacter.h"
 
 /* Project includes. */
+#include "Core/Settings/MultiplayerSettings.h"
 #include "Game/Actors/GameManager.h"
+#include "Game/GameplayAbilities/HealthAttributeSet.h"
 #include "Game/UI/InGameHUD.h"
+#include "Shared/Libraries/Logging.h"
 #include "Shared/Subsystems/UIManager.h"
 
 /* Engine includes. */
 #include "AbilitySystemComponent.h"
+#include "EnhancedInputComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "Core/Settings/MultiplayerSettings.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Net/UnrealNetwork.h"
+
+class UEnhancedInputLocalPlayerSubsystem;
 
 AMultiplayerGameCharacter::AMultiplayerGameCharacter()
 {
@@ -32,6 +38,8 @@ AMultiplayerGameCharacter::AMultiplayerGameCharacter()
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
+	bEnableCharacterInput = true;
+	
 	MaxTraceDistance = 6000.0f;
 	TraceCollisionChannel = TEnumAsByte(ECC_Visibility);
 
@@ -57,12 +65,30 @@ AMultiplayerGameCharacter::AMultiplayerGameCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 }
 
+void AMultiplayerGameCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	if (UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(PlayerInputComponent))
+	{
+		Input->BindAction(MovementInputAction, ETriggerEvent::Triggered, this, &AMultiplayerGameCharacter::MovementInput);
+		Input->BindAction(CameraInputAction, ETriggerEvent::Triggered, this, &AMultiplayerGameCharacter::CameraLook);
+		
+		for (const auto& Ability : AbilityToIDs)
+		{
+			Input->BindAction(Ability.InputAction, ETriggerEvent::Started, this, &AMultiplayerGameCharacter::OnAbilityInputPressed, Ability.InputID);
+		}
+	}
+}
+
 void AMultiplayerGameCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	if (IsLocallyControlled())
 	{
-		DoTargeting();
+		FHitResult OutHit;
+		DoTargeting(OutHit);
+		SetTargetLocal(OutHit);
 	}
 }
 
@@ -83,10 +109,34 @@ void AMultiplayerGameCharacter::PossessedBy(AController* NewController)
 	
 	if (IsValid(AbilitySystemComponent))
 	{
+		AbilitySystemComponent->AddSet<UHealthAttributeSet>();
+
+		TWeakObjectPtr WeakThis = this;
+		AbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(UHealthAttributeSet::GetHealthAttribute()).AddLambda([WeakThis](const FOnAttributeChangeData& Modifier)
+		{
+			if (WeakThis.IsValid()) WeakThis.Get()->OnCurrentHealthUpdated(Modifier.NewValue);
+		});
+		
+		AbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(UHealthAttributeSet::GetMaxHealthAttribute()).AddLambda([WeakThis](const FOnAttributeChangeData& Modifier)
+		{
+			if (WeakThis.IsValid()) WeakThis.Get()->OnMaxHealthUpdated(Modifier.NewValue);
+		});
+		
 		for (const auto& GrantedAbility : AbilityToIDs)
 		{
 			AbilitySystemComponent->GiveAbility(FGameplayAbilitySpec(GrantedAbility.Ability, 1, GrantedAbility.InputID, this));
 		}
+	}
+
+	if (InitialEffectConfig.Get() != nullptr)
+	{
+		const UGameplayEffect* GameplayEffect = InitialEffectConfig->GetDefaultObject<UGameplayEffect>();
+		const FGameplayEffectContextHandle Handle = AbilitySystemComponent->MakeEffectContext();
+		AbilitySystemComponent->ApplyGameplayEffectToSelf(GameplayEffect, 1.0f, Handle);
+	}
+	else
+	{
+		ULogging::LogVerboseError(GetName(), "AMultiplayerGameCharacter::PossessedBy", "Initial effect config was invalid!");
 	}
 	
 	OnCharacterPossessedClient();
@@ -107,12 +157,13 @@ void AMultiplayerGameCharacter::OnCharacterPossessedClient_Implementation()
 		if (const UInGameHUD* InGameHUD = Cast<UInGameHUD>(UserWidget))
 		{
 			InGameHUD->UpdatePlayerRoleText();
-			// TODO: Update current/max health.
 		}
 		
 		if (WeakThis.IsValid())
 		{
 			WeakThis.Get()->TryInitHUDTimeFromGameManager();
+			WeakThis.Get()->OnRep_DisplayCurrentHealth();
+			WeakThis.Get()->OnRep_DisplayMaxHealth();
 		}
 	}));
 }
@@ -161,7 +212,82 @@ void AMultiplayerGameCharacter::OnGamePhaseUpdated(EGamePhase NewGamePhase)
 	}
 }
 
-void AMultiplayerGameCharacter::DoTargeting()
+void AMultiplayerGameCharacter::MovementInput(const FInputActionInstance& Instance)
+{
+	if (!bEnableCharacterInput) return;
+	
+	const FRotator ThisControlRotation = GetControlRotation();
+	const FVector2D AxisValue = Instance.GetValue().Get<FVector2D>();
+	
+	AddMovementInput(FRotationMatrix(FRotator(0.0f, ThisControlRotation.Yaw, ThisControlRotation.Roll)).GetScaledAxis(EAxis::Y), AxisValue.X);
+	AddMovementInput(FRotationMatrix(FRotator(0.0f, ThisControlRotation.Yaw, 0.0f)).GetScaledAxis(EAxis::X), AxisValue.Y);
+}
+
+void AMultiplayerGameCharacter::CameraLook(const FInputActionInstance& Instance)
+{
+	const FVector2D AxisValue = Instance.GetValue().Get<FVector2D>();
+	AddControllerYawInput(AxisValue.X);
+	AddControllerPitchInput(AxisValue.Y);
+}
+
+void AMultiplayerGameCharacter::OnAbilityInputPressed(int32 InputID)
+{
+	if (!bEnableCharacterInput) return;
+	
+	if (IsValid(AbilitySystemComponent))
+	{
+		const FAbilityToID* FoundData = AbilityToIDs.FindByPredicate([InputID](const FAbilityToID& AbilityToID)
+		{
+			return AbilityToID.InputID == InputID;
+		});
+
+		if (FoundData != nullptr)
+		{
+			AbilitySystemComponent->TryActivateAbilityByClass(FoundData->Ability, true);
+		}
+	}
+}
+
+float AMultiplayerGameCharacter::GetCurrentHealth() const
+{
+	return UHealthAttributeSet::GetHealthAttribute().GetNumericValue(AbilitySystemComponent->GetAttributeSet(UHealthAttributeSet::StaticClass()));
+}
+
+float AMultiplayerGameCharacter::GetMaxHealth() const
+{
+	return UHealthAttributeSet::GetMaxHealthAttribute().GetNumericValue(AbilitySystemComponent->GetAttributeSet(UHealthAttributeSet::StaticClass()));
+}
+
+void AMultiplayerGameCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AMultiplayerGameCharacter, bEnableCharacterInput);
+	DOREPLIFETIME(AMultiplayerGameCharacter, DisplayCurrentHealth);
+	DOREPLIFETIME(AMultiplayerGameCharacter, DisplayMaxHealth);
+}
+
+void AMultiplayerGameCharacter::OnRep_DisplayCurrentHealth()
+{
+	if (!IsLocallyControlled()) return;
+	
+	if (const UInGameHUD* GameHUD = Cast<UInGameHUD>(UUIManager::GetLoadedWidget(this, EViewportWidget::GameHUD)); IsValid(GameHUD))
+	{
+		GameHUD->UpdateCurrentHealthText(FMath::Max(DisplayCurrentHealth, 0.0f)); // Noting that we do not want the display going into negative numbers.
+	}
+}
+
+void AMultiplayerGameCharacter::OnRep_DisplayMaxHealth()
+{
+	if (!IsLocallyControlled()) return;
+	
+	if (const UInGameHUD* GameHUD = Cast<UInGameHUD>(UUIManager::GetLoadedWidget(this, EViewportWidget::GameHUD)); IsValid(GameHUD))
+	{
+		GameHUD->UpdateMaxHealthText(FMath::Max(DisplayMaxHealth, 0.0f));
+	}
+}
+
+void AMultiplayerGameCharacter::DoTargeting(FHitResult& OutHit)
 {
 	if (!IsValid(GetWorld())) return;
 	
@@ -172,21 +298,22 @@ void AMultiplayerGameCharacter::DoTargeting()
 	CollisionParams.bTraceComplex = false;
 	CollisionParams.AddIgnoredActor(this);
 	
-	if (FHitResult Hit; GetWorld()->LineTraceSingleByChannel(
-		Hit,
+	GetWorld()->LineTraceSingleByChannel(
+		OutHit,
 		StartLocation,
 		EndLocation,
 		TraceCollisionChannel,
-		CollisionParams
-		))
-	{
-		if (Hit.GetActor() != CurrentTarget)
-		{
-			SetHighlightTarget(Hit.GetActor(), true);
-			SetHighlightTarget(CurrentTarget, false);
+		CollisionParams);
+}
 
-			CurrentTarget = Hit.GetActor();
-		}
+void AMultiplayerGameCharacter::SetTargetLocal(const FHitResult& Hit)
+{
+	if (Hit.GetActor() != CurrentTarget)
+	{
+		SetHighlightTarget(Hit.GetActor(), true);
+		SetHighlightTarget(CurrentTarget, false);
+
+		CurrentTarget = Hit.GetActor();
 	}
 }
 
@@ -216,5 +343,32 @@ void AMultiplayerGameCharacter::SetHighlightTarget(const AActor* Target, bool bS
 	{
 		SkeletalMeshComponent->SetRenderCustomDepth(bShouldHighlight);
 	}
+}
+
+void AMultiplayerGameCharacter::OnCurrentHealthUpdated(float NewValue)
+{
+	const EHealthChangeType ChangeType = GetChangeType(NewValue, DisplayCurrentHealth);
+	
+	DisplayCurrentHealth = NewValue;
+	OnRep_DisplayCurrentHealth();
+	OnCurrentHealthChanged(DisplayCurrentHealth, ChangeType);
+}
+
+void AMultiplayerGameCharacter::OnMaxHealthUpdated(float NewValue)
+{
+	const EHealthChangeType ChangeType = GetChangeType(NewValue, DisplayMaxHealth);
+	
+	DisplayMaxHealth = NewValue;
+	OnRep_DisplayMaxHealth();
+	OnMaxHealthChanged(DisplayMaxHealth, ChangeType);
+}
+
+EHealthChangeType AMultiplayerGameCharacter::GetChangeType(float NewValue, float OldValue)
+{
+	EHealthChangeType ChangeType = EHealthChangeType::Unchanged;
+	if (NewValue > OldValue) ChangeType = EHealthChangeType::Increased;
+	else if (NewValue < OldValue) ChangeType = EHealthChangeType::Lost;
+
+	return ChangeType;
 }
 

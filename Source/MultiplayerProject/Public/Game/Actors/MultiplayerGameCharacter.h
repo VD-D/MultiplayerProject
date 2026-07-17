@@ -10,6 +10,7 @@
 
 class UCameraComponent;
 class UGameplayAbility;
+class UGameplayEffect;
 class UInputAction;
 class UInputComponent;
 class UInputMappingContext;
@@ -17,11 +18,22 @@ class USpringArmComponent;
 
 struct FInputActionInstance;
 
+UENUM(BlueprintType)
+enum class EHealthChangeType : uint8
+{
+	Lost      UMETA(DisplayName = "Lost"),
+	Unchanged UMETA(DisplayName = "Unchanged"),
+	Increased UMETA(DisplayName = "Increased")
+};
+
 /* Defines a pair of an input action and an ability. */
 USTRUCT(BlueprintType)
 struct FAbilityToID
 {
 	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TObjectPtr<UInputAction> InputAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TSubclassOf<UGameplayAbility> Ability;
@@ -52,18 +64,42 @@ protected:
 #pragma endregion Components
 
 #pragma region Config
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Components")
+	/* Input action driving movement. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
+	TObjectPtr<UInputAction> MovementInputAction;
+
+	/* Input action camera look. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
+	TObjectPtr<UInputAction> CameraInputAction;
+	
+	/* All abilities this character has. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Multiplayer Game Character")
 	TArray<FAbilityToID> AbilityToIDs;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Components")
+	/* Enables/disables movement and ability inputs. */
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Multiplayer Game Character")
+	bool bEnableCharacterInput;
+
+	/* This should be used to configure initial attributes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Multiplayer Game Character")
+	TSubclassOf<UGameplayEffect> InitialEffectConfig;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Multiplayer Game Character")
 	float MaxTraceDistance;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Components")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Multiplayer Game Character")
 	TEnumAsByte<ECollisionChannel> TraceCollisionChannel;
+	
 private:
 	/* The last actor we have targeted. */
 	UPROPERTY()
 	TObjectPtr<AActor> CurrentTarget;
+
+	UPROPERTY(ReplicatedUsing=OnRep_DisplayCurrentHealth)
+	float DisplayCurrentHealth;
+	
+	UPROPERTY(ReplicatedUsing=OnRep_DisplayMaxHealth)
+	float DisplayMaxHealth;
 #pragma endregion Config
 
 #pragma region AbilitySystemInterface
@@ -80,6 +116,8 @@ public:
 	 * Default constructor.
 	 */
 	AMultiplayerGameCharacter();
+
+	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 	/**
 	 * Does trace and updates current target.
@@ -118,29 +156,130 @@ protected:
 	void OnGamePhaseUpdated(EGamePhase NewGamePhase);
 #pragma endregion Construction
 
+#pragma region Input
+private:
+	/**
+	 * Enables WASD movement for this combat vehicle.
+	 * @param Instance Should be a vector 2D.
+	 */
+	UFUNCTION()
+	void MovementInput(const FInputActionInstance& Instance);
+
+	/**
+	 * Attempts to interact with whatever is at the top of the interact stack.
+	 * @param Instance Unused.
+	 */
+	UFUNCTION()
+	void CameraLook(const FInputActionInstance& Instance);
+
+	UFUNCTION()
+	void OnAbilityInputPressed(int32 InputID);
+#pragma endregion Input
+
 #pragma region Accessors
 public:
 	/**
-	 * @return Target we are looking at.
+	 * @return Target we are looking at. This is only valid on the local client.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Multiplayer Game Character")
 	AActor* GetCurrentTarget() const { return CurrentTarget; }
+
+	/**
+	 * @return Whether character input (movement and abilities) are enabled.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Game Character")
+	bool GetEnableCharacterInput() const { return bEnableCharacterInput; }
+
+	/**
+	 * This value is only valid on the server.
+	 * @return Character's current health.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Game Character")
+	float GetCurrentHealth() const;
+
+	/**
+	 * This value is only valid on the server.
+	 * @return Character's max health.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Game Character")
+	float GetMaxHealth() const;
+
+	/**
+	 * Server only. Sets character input as enabled or disabled.
+	 * @param NewValue True to enable, false to disable.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Multiplayer Game Character")
+	void SetEnableCharacterInput(bool NewValue) { if (HasAuthority()) bEnableCharacterInput = NewValue; }
 #pragma endregion Accessors
 
+#pragma region Replication
+	/**
+	 * Sets props for replication.
+	 * @param OutLifetimeProps Unused.
+	 */
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+private:	
+	UFUNCTION()
+	void OnRep_DisplayCurrentHealth();
+
+	UFUNCTION()
+	void OnRep_DisplayMaxHealth();
+#pragma endregion Replication
+	
 #pragma region Targeting
-protected:
+public:
 	/**
 	 * Performs the line trace necessary for targeting.
 	 */
-	void DoTargeting();
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Game Character")
+	void DoTargeting(FHitResult& OutHit);
 
+protected:
+	/**
+	 * Updates the CurrentTarget if it is differnet from the previous one.
+	 * @param Hit Hit result to get actor from.
+	 */
+	void SetTargetLocal(const FHitResult& Hit);
+	
 	/**
 	 * Sets the target's static and skeletal mesh components highlighted (simply renders them in custom depth).
 	 * This is only assuming the target does not exceed the max size, as set in settings.
 	 * @param Target Target we want to highlight.
 	 * @param bShouldHighlight Whether we want to turn highlights on or off.
 	 */
-	//UFUNCTION(Client, Reliable)
-	void SetHighlightTarget(const AActor* Target, bool bShouldHighlight);
+	static void SetHighlightTarget(const AActor* Target, bool bShouldHighlight);
 #pragma endregion Targeting
+
+#pragma region GameplayAbility
+private:
+	UFUNCTION()
+	void OnCurrentHealthUpdated(float NewValue);
+
+	UFUNCTION()
+	void OnMaxHealthUpdated(float NewValue);
+
+	static EHealthChangeType GetChangeType(float NewValue, float OldValue);
+#pragma endregion GameplayAbility
+
+#pragma region CharacterAPI
+protected:
+	/**
+	 * Callback each current health changes.
+	 * @param NewValue New health value.
+	 * @param ChangeType Whether this value is greater (increased), the same (unchanged) or lower (lost) than previous.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Multiplayer Game Character")
+	void OnCurrentHealthChanged(float NewValue, EHealthChangeType ChangeType);
+	virtual void OnCurrentHealthChanged_Implementation(float NewValue, EHealthChangeType ChangeType) {}
+
+	/**
+	 * Callback each time max health changes.
+	 * @param NewValue New health value.
+	 * @param ChangeType Whether this value is greater (increased), the same (unchanged) or lower (lost) than previous.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Multiplayer Game Character")
+	void OnMaxHealthChanged(float NewValue, EHealthChangeType ChangeType);
+	virtual void OnMaxHealthChanged_Implementation(float NewValue, EHealthChangeType ChangeType) {}
+#pragma endregion CharacterAPI
 };

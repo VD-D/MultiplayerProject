@@ -46,12 +46,14 @@ void AGameManager::AssignRolesAndPossessControllers()
 {
 	if (!HasAuthority() || !IsValid(GetWorld())) return;
 
+	/*
 	AMultiplayerGameMode* MultiplayerGameMode = AMultiplayerGameMode::GetMultiplayerGameMode(this);
 	if (!IsValid(MultiplayerGameMode))
 	{
 		ULogging::LogVerboseError(GetName(), "AGameManager::AssignRolesAndPossessControllers", "Game mode is not of type AMultiplayerGameMode!");
 		return;
 	}
+	*/
 
 	// Step 0. Update game phase.
 	CurrentGamePhase = EGamePhase::GameCountdown;
@@ -105,6 +107,7 @@ void AGameManager::AssignRolesAndPossessControllers()
 	
 	for (const auto PlayerController : Controllers)
 	{
+		
 		AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(PlayerController);
 		if (!IsValid(GameController))
 		{
@@ -121,11 +124,9 @@ void AGameManager::AssignRolesAndPossessControllers()
 
 		const FTransform SpawnTransform = StartPreference == EStartPreference::CustomStarts ? GetSpawnTransformFromHunterPropStart(CurrentRoleType, HunterPropStarts) : GetSpawnTransformFromPlayerStart(PlayerStarts);
 		Index += 1;
-
-		/*
+		
 		GameController->SetRoleType(CurrentRoleType);
-		MultiplayerGameMode->RestartPlayer(GameController); //, SpawnTransform);
-		*/
+		// MultiplayerGameMode->RestartPlayer(GameController); //, SpawnTransform); 
 
 		
 		if (CurrentRoleType == ERoleType::Hunter)
@@ -292,7 +293,7 @@ void AGameManager::OnTimerForPhaseEnded()
 		CurrentGamePhase = EGamePhase::InGame;
 		OnRep_CurrentGamePhase();
 
-		UMultiplayerLibrary::SetInputEnabledOnAllControllers(this, true);
+		// UMultiplayerLibrary::SetInputEnabledOnAllControllers(this, true);
 	}
 	else if (CurrentGamePhase == EGamePhase::InGame)
 	{
@@ -310,7 +311,7 @@ void AGameManager::OnTimerForPhaseEnded()
 			}
 		}
 
-		UMultiplayerLibrary::SetInputEnabledOnAllControllers(this, false);
+		// UMultiplayerLibrary::SetInputEnabledOnAllControllers(this, false);
 	}
 	else
 	{

@@ -153,3 +153,22 @@ FVector UMultiplayerSettings::GetMaxTargetableObjectSize()
     if (const UMultiplayerSettings* Settings = GetGenericSettings()) return Settings->MaxTargetableObjectSize;
     return FVector::OneVector;
 }
+
+bool UMultiplayerSettings::GetIsMeshForbidden(UStaticMesh* StaticMeshToCheck)
+{
+    if (const UMultiplayerSettings* Settings = GetGenericSettings())
+    {
+        return Settings->ForbiddenMeshes.ContainsByPredicate([StaticMeshToCheck](TSoftObjectPtr<UStaticMesh> Mesh)
+        {
+            // Note: If the StaticMeshToCheck was ever loaded, that means Mesh.Get() will be valid upon doing this check.
+            if (Mesh.Get())
+            {
+                return Mesh.Get() == StaticMeshToCheck;
+            }
+
+            return false;
+        });
+    }
+    
+    return false;
+}

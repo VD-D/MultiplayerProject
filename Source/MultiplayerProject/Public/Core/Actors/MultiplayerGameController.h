@@ -36,14 +36,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
 	TObjectPtr<UInputMappingContext> InputMappingContext;
 
-	/* Input action driving movement. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
-	TObjectPtr<UInputAction> MovementInputAction;
-
-	/* Input action camera look. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
-	TObjectPtr<UInputAction> CameraInputAction;
-
 	/* Input actions enabling usage of gameplay abilities. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
 	TArray<FAbilityInputMapping> AbilityActions;
@@ -66,35 +58,4 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Multiplayer Game Controller")
 	void SetRoleType(ERoleType NewRole) { if (HasAuthority()) CurrentRole = NewRole; }
 #pragma endregion Accessors
-
-#pragma region Input
-private:
-	/**
-	 * Enables WASD movement for this combat vehicle.
-	 * @param Instance Should be a vector 2D.
-	 */
-	UFUNCTION()
-	void MovementInput(const FInputActionInstance& Instance);
-
-	/**
-	 * Attempts to interact with whatever is at the top of the interact stack.
-	 * @param Instance Unused.
-	 */
-	UFUNCTION()
-	void CameraLook(const FInputActionInstance& Instance);
-
-	/**
-	 * Informs ability system component an ability with a given id has been pressed.
-	 * @param InputID Passed to ability system component
-	 */
-	UFUNCTION()
-	void OnAbilityInputPressed(int32 InputID);
-
-	/**
-	 * Informs ability system component an ability with a given id has been released.
-	 * @param InputID Passed to ability system component
-	 */
-	UFUNCTION()
-	void OnAbilityInputReleased(int32 InputID);
-#pragma endregion Input
 };
