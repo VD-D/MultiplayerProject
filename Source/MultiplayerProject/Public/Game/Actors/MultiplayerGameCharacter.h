@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "AbilitySystemInterface.h"
 #include "GameFramework/Character.h"
+#include "Shared/Types/SharedDelegates.h"
 #include "Shared/Types/SharedEnums.h"
 #include "MultiplayerGameCharacter.generated.h"
 
@@ -24,6 +25,13 @@ enum class EHealthChangeType : uint8
 	Lost      UMETA(DisplayName = "Lost"),
 	Unchanged UMETA(DisplayName = "Unchanged"),
 	Increased UMETA(DisplayName = "Increased")
+};
+
+UENUM(BlueprintType)
+enum class ECharacterAnimationState : uint8
+{
+	Alive UMETA(DisplayName = "Alive"),
+	Dead  UMETA(DisplayName = "Dead")
 };
 
 /* Defines a pair of an input action and an ability. */
@@ -50,6 +58,12 @@ UCLASS(Abstract, Blueprintable)
 class MULTIPLAYERPROJECT_API AMultiplayerGameCharacter : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
+#pragma region Delegates
+public:
+	UPROPERTY(BlueprintAssignable, Category = "Multiplayer Game Character")
+	FGenericDelegate OnCharacterDeath;
+#pragma endregion Delegates
+	
 #pragma region Components
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
@@ -89,6 +103,14 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Multiplayer Game Character")
 	TEnumAsByte<ECollisionChannel> TraceCollisionChannel;
+
+	/* How long until we reach the end of the "death" state. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Multiplayer Game Character")
+	float DeathHoldTime;
+
+	/* This should be used for cosmetic-type effects such as animations. */
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Multiplayer Game Character")
+	ECharacterAnimationState CharacterAnimationState;
 	
 private:
 	/* The last actor we have targeted. */
@@ -117,6 +139,10 @@ public:
 	 */
 	AMultiplayerGameCharacter();
 
+	/**
+	 * Configures input actions.
+	 * @param PlayerInputComponent Component to bind input to.
+	 */
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 	/**
@@ -253,33 +279,53 @@ protected:
 
 #pragma region GameplayAbility
 private:
+	/**
+	 * Called when the character drops to or below 0 health.
+	 */
+	void Die();
+
+	UFUNCTION()
+	void OnDeathDelayFinished();
+	
 	UFUNCTION()
 	void OnCurrentHealthUpdated(float NewValue);
 
 	UFUNCTION()
 	void OnMaxHealthUpdated(float NewValue);
 
+	/**
+	 * @param NewValue Value being changed to.
+	 * @param OldValue Current value.
+	 * @return How new value compares to old value. NewValue == OldValue -> Unchanged, NewValue > OldValue -> Increased, NewValue < OldValue -> Lost.
+	 */
 	static EHealthChangeType GetChangeType(float NewValue, float OldValue);
 #pragma endregion GameplayAbility
 
 #pragma region CharacterAPI
 protected:
 	/**
+	 * Called after the death delay.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Multiplayer Game Character")
+	void PostDeath();
+	virtual void PostDeath_Implementation() {}
+	
+	/**
 	 * Callback each current health changes.
 	 * @param NewValue New health value.
 	 * @param ChangeType Whether this value is greater (increased), the same (unchanged) or lower (lost) than previous.
 	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "Multiplayer Game Character")
-	void OnCurrentHealthChanged(float NewValue, EHealthChangeType ChangeType);
-	virtual void OnCurrentHealthChanged_Implementation(float NewValue, EHealthChangeType ChangeType) {}
+	// UFUNCTION(BlueprintImplementableEvent, Category = "Multiplayer Game Character")
+	virtual void OnCurrentHealthChanged(float NewValue, EHealthChangeType ChangeType) {}
+	// virtual void OnCurrentHealthChanged_Implementation(float NewValue, EHealthChangeType ChangeType) {}
 
 	/**
 	 * Callback each time max health changes.
 	 * @param NewValue New health value.
 	 * @param ChangeType Whether this value is greater (increased), the same (unchanged) or lower (lost) than previous.
 	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "Multiplayer Game Character")
-	void OnMaxHealthChanged(float NewValue, EHealthChangeType ChangeType);
-	virtual void OnMaxHealthChanged_Implementation(float NewValue, EHealthChangeType ChangeType) {}
+	//UFUNCTION(BlueprintImplementableEvent, Category = "Multiplayer Game Character")
+	virtual void OnMaxHealthChanged(float NewValue, EHealthChangeType ChangeType) {}
+	//virtual void OnMaxHealthChanged_Implementation(float NewValue, EHealthChangeType ChangeType) {}
 #pragma endregion CharacterAPI
 };

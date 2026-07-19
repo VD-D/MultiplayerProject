@@ -39,6 +39,8 @@ protected:
 	
 	FTimerHandle CountdownTimeTimerHandle;
 	FTimerHandle GamePhaseTimerHandle;
+
+	ERoleType SideWhichWon;
 #pragma endregion Interal
 	
 #pragma region Construction
@@ -76,20 +78,37 @@ public:
 	 * @param WorldContextObject Gets world.
 	 * @return Current instance.
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Game Manager", meta = (WorldContext = "WorldContextObject"))
+	UFUNCTION(BlueprintPure, Category = "Game Manager", meta = (WorldContext = "WorldContextObject"))
 	static AGameManager* GetGameManager(const UObject* WorldContextObject);
-	
-private:
-	/**
-	 * @param PlayerStarts (OUT) All player start actors.
-	 */
-	void GetPlayerStarts(TArray<APlayerStart*>& PlayerStarts) const;
 
 	/**
+	 * This performs a check of the conditions in the world to see if either side has won.
+	 * @param WorldContextObject Gets world.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Game Manager", meta = (WorldContext = "WorldContextObject"))
+	static void CheckGameFinished(const UObject* WorldContextObject);
+
+	/**
+	 * @param WorldContextObject Gets world.
+	 * @param PlayerStarts (OUT) All player start actors.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Game Manager", meta = (WorldContext = "WorldContextObject"))
+	static void GetPlayerStarts(const UObject* WorldContextObject, TArray<APlayerStart*>& PlayerStarts);
+	
+	/**
+	 * @param WorldContextObject Gets world.
 	 * @param RoleType Of what role type to get starts for.
 	 * @param HunterPropStarts Out array of hunter prop start actors.
 	 */
-	void GetHunterPropStartsOfType(ERoleType RoleType, TArray<AHunterPropStart*>& HunterPropStarts) const;
+	UFUNCTION(BlueprintCallable, Category = "Game Manager", meta = (WorldContext = "WorldContextObject"))
+	static void GetHunterPropStartsOfType(const UObject* WorldContextObject, ERoleType RoleType, TArray<AHunterPropStart*>& HunterPropStarts);
+	
+private:
+	/**
+	 * Displays the scoreboard (advances game to scoreboard phase if not already in it), then finishes the game.
+	 * @param WinningSide Which side won.
+	 */
+	void SetGameFinishedWithResult(ERoleType WinningSide);
 
 	/**
 	 * @param PlayerStarts (IN-OUT) Player starts to get transforms from.

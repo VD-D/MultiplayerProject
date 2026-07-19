@@ -14,7 +14,8 @@ enum class EViewportWidget : uint8
 	MainMenu      UMETA(DisplayName = "Main Menu"),
 	Lobby         UMETA(DisplayName = "Lobby"),
 	GameHUD       UMETA(DisplayName = "GameHUD"),
-	LoadingScreen UMETA(DisplayName = "Loading Screen")
+	LoadingScreen UMETA(DisplayName = "Loading Screen"),
+	Scoreboard    UMETA(DisplayName = "Scoreboard")
 };
 #pragma endregion UI
 

@@ -16,6 +16,7 @@
 #include "EnhancedInputComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Core/Actors/MultiplayerGameController.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Net/UnrealNetwork.h"
@@ -42,6 +43,9 @@ AMultiplayerGameCharacter::AMultiplayerGameCharacter()
 	
 	MaxTraceDistance = 6000.0f;
 	TraceCollisionChannel = TEnumAsByte(ECC_Visibility);
+
+	DeathHoldTime = 3.0f;
+	CharacterAnimationState = ECharacterAnimationState::Alive;
 
 	if (UCapsuleComponent* CharacterCapsule = GetCapsuleComponent(); IsValid(CharacterCapsule))
 	{
@@ -99,7 +103,11 @@ void AMultiplayerGameCharacter::BeginPlay()
 
 void AMultiplayerGameCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	UUIManager::RemoveViewportWidget(this, EViewportWidget::GameHUD);
+	if (IsLocallyControlled())
+	{
+		UUIManager::RemoveViewportWidget(this, EViewportWidget::GameHUD);
+	}
+	
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -265,6 +273,7 @@ void AMultiplayerGameCharacter::GetLifetimeReplicatedProps(TArray<FLifetimePrope
 	DOREPLIFETIME(AMultiplayerGameCharacter, bEnableCharacterInput);
 	DOREPLIFETIME(AMultiplayerGameCharacter, DisplayCurrentHealth);
 	DOREPLIFETIME(AMultiplayerGameCharacter, DisplayMaxHealth);
+	DOREPLIFETIME(AMultiplayerGameCharacter, CharacterAnimationState);
 }
 
 void AMultiplayerGameCharacter::OnRep_DisplayCurrentHealth()
@@ -333,6 +342,14 @@ void AMultiplayerGameCharacter::SetHighlightTarget(const AActor* Target, bool bS
 
 	for (const auto StaticMeshComponent : StaticMeshComponents)
 	{
+		if (UMultiplayerSettings::GetIsMeshForbidden(StaticMeshComponent->GetStaticMesh()))
+		{
+			return;
+		}
+	}
+
+	for (const auto StaticMeshComponent : StaticMeshComponents)
+	{
 		StaticMeshComponent->SetRenderCustomDepth(bShouldHighlight); 
 	}
 
@@ -345,13 +362,45 @@ void AMultiplayerGameCharacter::SetHighlightTarget(const AActor* Target, bool bS
 	}
 }
 
+void AMultiplayerGameCharacter::Die()
+{
+	if (!HasAuthority()) return;
+
+	CharacterAnimationState = ECharacterAnimationState::Dead;
+
+	FTimerHandle TimerHandle;
+	FTimerDelegate TimerDelegate;
+	TimerDelegate.BindUObject(this, &AMultiplayerGameCharacter::OnDeathDelayFinished);
+	
+	GetWorldTimerManager().SetTimer(TimerHandle, TimerDelegate, FMath::Max(0.1f, DeathHoldTime), false);
+}
+
+void AMultiplayerGameCharacter::OnDeathDelayFinished()
+{
+	if (!HasAuthority()) return;
+	
+	OnCharacterDeath.Broadcast();
+	
+	if (AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(GetController()); IsValid(GameController))
+	{
+		// DetachFromControllerPendingDestroy();
+		GameController->SetSpectatorState();
+	}
+
+	// PostDeath();
+	AGameManager::CheckGameFinished(this);
+	Destroy();
+}
+
 void AMultiplayerGameCharacter::OnCurrentHealthUpdated(float NewValue)
 {
 	const EHealthChangeType ChangeType = GetChangeType(NewValue, DisplayCurrentHealth);
 	
 	DisplayCurrentHealth = NewValue;
 	OnRep_DisplayCurrentHealth();
-	OnCurrentHealthChanged(DisplayCurrentHealth, ChangeType);
+	OnCurrentHealthChanged(NewValue, ChangeType);
+
+	if (NewValue <= 0.0f) Die();
 }
 
 void AMultiplayerGameCharacter::OnMaxHealthUpdated(float NewValue)
@@ -360,7 +409,7 @@ void AMultiplayerGameCharacter::OnMaxHealthUpdated(float NewValue)
 	
 	DisplayMaxHealth = NewValue;
 	OnRep_DisplayMaxHealth();
-	OnMaxHealthChanged(DisplayMaxHealth, ChangeType);
+	OnMaxHealthChanged(NewValue, ChangeType);
 }
 
 EHealthChangeType AMultiplayerGameCharacter::GetChangeType(float NewValue, float OldValue)

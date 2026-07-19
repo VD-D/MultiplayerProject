@@ -15,6 +15,7 @@ DECLARE_DELEGATE_TwoParams(FOnSessionsFound, bool bSuccess, const TArray<FSessio
 DECLARE_DELEGATE_TwoParams(FOnSessionJoined, EOnJoinSessionCompleteResult::Type Result, const FName& SessionName);
 DECLARE_DELEGATE_TwoParams(FOnSessionDestroyed, bool bSuccess, const FName& SessionName);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FGenericDelegate);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnIntPropertyChanged, int32, IntProperty);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFloatPropertyChanged, float, FloatProperty);
 

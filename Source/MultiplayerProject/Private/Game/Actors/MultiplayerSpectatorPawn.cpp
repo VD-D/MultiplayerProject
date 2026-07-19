@@ -21,10 +21,12 @@ AMultiplayerSpectatorPawn::AMultiplayerSpectatorPawn()
 
 void AMultiplayerSpectatorPawn::SetFollowNewCharacter()
 {
-	if (!HasAuthority()) return;
-
+	if (!HasAuthority() || !IsLocallyControlled()) return;
+	
 	if (const AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(GetController()))
 	{
+		UE_LOG(LogTemp, Log, TEXT("SetFollowNewCharacter (current role type is %s)"), *UEnum::GetValueAsString(GameController->GetRoleType()));
+		
 		TArray<AMultiplayerGameCharacter*> GameCharacters;
 		if (GameController->GetRoleType() == ERoleType::Hunter)
 		{
@@ -49,11 +51,16 @@ void AMultiplayerSpectatorPawn::SetFollowNewCharacter()
 
 		if (GameCharacters.IsEmpty())
 		{
+			UE_LOG(LogTemp, Log, TEXT("Did not find character to follow"));
 			OnClientFollowNewCharacter(nullptr);
 		}
 		else
 		{
-			OnClientFollowNewCharacter(GameCharacters[FMath::RandRange(0, GameCharacters.Num() - 1)]);
+			UE_LOG(LogTemp, Log, TEXT("Found character to follow"));
+			
+			AMultiplayerGameCharacter* GameCharacter = GameCharacters[FMath::RandRange(0, GameCharacters.Num() - 1)];
+			GameCharacter->OnCharacterDeath.AddDynamic(this, &AMultiplayerSpectatorPawn::SetFollowNewCharacter); // NOTE: If the character we're following dies, follow a new one.
+			OnClientFollowNewCharacter(GameCharacter);
 		}
 	}
 	else
@@ -74,6 +81,6 @@ void AMultiplayerSpectatorPawn::OnClientFollowNewCharacter_Implementation(AMulti
 	
 	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
 	{
-		PlayerController->SetViewTarget(CharacterToFollow);
+		PlayerController->SetViewTargetWithBlend(CharacterToFollow, 0.2f);
 	}
 }

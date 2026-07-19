@@ -11,18 +11,6 @@ struct FInputActionInstance;
 class UInputAction;
 class UInputMappingContext;
 
-USTRUCT(BlueprintType)
-struct FAbilityInputMapping
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TObjectPtr<UInputAction> InputAction;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	int32 InputID;
-};
-
 /**
  * Controller which exists to set character class.
  */
@@ -35,10 +23,6 @@ protected:
 	/* Mapping Context for player input. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
 	TObjectPtr<UInputMappingContext> InputMappingContext;
-
-	/* Input actions enabling usage of gameplay abilities. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
-	TArray<FAbilityInputMapping> AbilityActions;
 	
 	ERoleType CurrentRole = ERoleType::Unknown;
 #pragma endregion Config
@@ -49,6 +33,11 @@ public:
 	 * Configures player inputs.
 	 */
 	virtual void BeginPlay() override;
+
+	/**
+	 * Sets this player controller as a spectator.
+	 */
+	void SetSpectatorState();
 #pragma endregion Construction
 	
 #pragma region Accessors
@@ -56,6 +45,17 @@ public:
 	ERoleType GetRoleType() const { return CurrentRole; }
 
 	UFUNCTION(BlueprintCallable, Category = "Multiplayer Game Controller")
-	void SetRoleType(ERoleType NewRole) { if (HasAuthority()) CurrentRole = NewRole; }
+	void SetRoleType(ERoleType NewRole); // {  }
 #pragma endregion Accessors
+
+#pragma region Scoreboard
+	/**
+	 * Because the pawn possessed by the controller is nondeterministic at game end (some players may still be playing and alive,
+	 * others might be spectators) we handle showing the scoreboard here.
+	 * @param WinningSide Side which won the game.
+	 * @param Duration How long to display scoreboard for.
+	 */
+	UFUNCTION(BlueprintCallable, Client, Reliable, Category = "Multiplayer Game Controller")
+	void DisplayScoreboardForDuration(ERoleType WinningSide, float Duration);
+#pragma endregion Scoreboard
 };

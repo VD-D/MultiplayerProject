@@ -34,5 +34,21 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, NetMulticast, Reliable, Category = "Prop Character")
 	void TurnSelfIntoProp(UStaticMeshComponent* StaticMeshComp);
+
+	/**
+	 * Unhides player mesh and makes prop mesh invisible.
+	 */
+	UFUNCTION(BlueprintCallable, NetMulticast, Reliable, Category = "Prop Character")
+	void OnHit();
 #pragma endregion Prop
+
+#pragma region CharacterAPI
+protected:
+	/**
+	 * Waits for a moment, then teleports the character to a new location.
+	 * @param NewValue Must be above 0.
+	 * @param ChangeType Must only be a loss.
+	 */
+	virtual void OnCurrentHealthChanged(float NewValue, EHealthChangeType ChangeType) override;
+#pragma endregion CharacterAPI
 };

@@ -21,7 +21,7 @@
 
 AGameManager::AGameManager()
 {
-	PrimaryActorTick.bCanEverTick = true;
+	SideWhichWon = ERoleType::Unknown;
 }
 
 AGameManager* AGameManager::CreateInstance(const UObject* WorldContextObject, TSubclassOf<AGameManager> GameManagerClass)
@@ -107,7 +107,6 @@ void AGameManager::AssignRolesAndPossessControllers()
 	
 	for (const auto PlayerController : Controllers)
 	{
-		
 		AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(PlayerController);
 		if (!IsValid(GameController))
 		{
@@ -124,14 +123,14 @@ void AGameManager::AssignRolesAndPossessControllers()
 
 		const FTransform SpawnTransform = StartPreference == EStartPreference::CustomStarts ? GetSpawnTransformFromHunterPropStart(CurrentRoleType, HunterPropStarts) : GetSpawnTransformFromPlayerStart(PlayerStarts);
 		Index += 1;
-		
+
+		UE_LOG(LogTemp, Log, TEXT("Trying to set new role (%s) ..."), *UEnum::GetValueAsString(CurrentRoleType));
 		GameController->SetRoleType(CurrentRoleType);
 		// MultiplayerGameMode->RestartPlayer(GameController); //, SpawnTransform); 
 
 		
 		if (CurrentRoleType == ERoleType::Hunter)
 		{
-			
 			if (AHunterCharacter* HunterCharacter = GetWorld()->SpawnActor<AHunterCharacter>(AMultiplayerGameMode::GetHunterCharacterClass(this), SpawnTransform, SpawnParameters); IsValid(HunterCharacter))
 			{
 				PlayerController->Possess(HunterCharacter);
@@ -170,29 +169,89 @@ AGameManager* AGameManager::GetGameManager(const UObject* WorldContextObject)
 	return nullptr;
 }
 
-void AGameManager::GetPlayerStarts(TArray<APlayerStart*>& PlayerStarts) const
+void AGameManager::CheckGameFinished(const UObject* WorldContextObject)
+{
+	if (AGameManager* CurrentInstance = GetGameManager(WorldContextObject))
+	{
+		if (!CurrentInstance->HasAuthority()) return;
+
+		bool bAnyHunterLeft = false;
+		for (TActorIterator<AHunterCharacter> HunterItr(CurrentInstance->GetWorld()); HunterItr; ++HunterItr)
+		{
+			if (const AHunterCharacter* HunterCharacter = *HunterItr; !IsValid(HunterCharacter) || HunterCharacter->GetCurrentHealth() <= 0.0f) continue;
+
+			bAnyHunterLeft = true;
+			break;
+		}
+
+		if (!bAnyHunterLeft)
+		{
+			CurrentInstance->SetGameFinishedWithResult(ERoleType::Prop);
+			return;
+		}
+
+		bool bAnyPropLeft = false;
+		for (TActorIterator<APropCharacter> PropItr(CurrentInstance->GetWorld()); PropItr; ++PropItr)
+		{
+			if (const APropCharacter* PropCharacter = *PropItr; !IsValid(PropCharacter) || PropCharacter->GetCurrentHealth() <= 0.0f) continue;
+
+			bAnyPropLeft = true;
+			break;
+		}
+
+		if (!bAnyPropLeft)
+		{
+			CurrentInstance->SetGameFinishedWithResult(ERoleType::Hunter);
+		}
+	}
+}
+
+void AGameManager::GetPlayerStarts(const UObject* WorldContextObject, TArray<APlayerStart*>& PlayerStarts)
 {
 	PlayerStarts.Empty();
-	for (TActorIterator<APlayerStart> Iterator(GetWorld()); Iterator; ++Iterator)
-	{
-		APlayerStart* PlayerStart = *Iterator;
-		if (!IsValid(PlayerStart)) continue;
 
-		PlayerStarts.Emplace(PlayerStart);
+	if (GEngine == nullptr) return;
+	if (const UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull); IsValid(World))
+	{
+		for (TActorIterator<APlayerStart> Iterator(World); Iterator; ++Iterator)
+		{
+			APlayerStart* PlayerStart = *Iterator;
+			if (!IsValid(PlayerStart)) continue;
+
+			PlayerStarts.Emplace(PlayerStart);
+		}
 	}
+	
 }
 
-void AGameManager::GetHunterPropStartsOfType(ERoleType RoleType, TArray<AHunterPropStart*>& HunterPropStarts) const
+void AGameManager::GetHunterPropStartsOfType(const UObject* WorldContextObject, ERoleType RoleType, TArray<AHunterPropStart*>& HunterPropStarts)
 {
 	HunterPropStarts.Empty();
-	for (TActorIterator<AHunterPropStart> Iterator(GetWorld()); Iterator; ++Iterator)
+	if (GEngine == nullptr) return;
+	if (const UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull); IsValid(World))
 	{
-		AHunterPropStart* HunterPropStart = *Iterator;
-		if (!IsValid(HunterPropStart) || HunterPropStart->GetStartRoleType() != RoleType) continue;
+		for (TActorIterator<AHunterPropStart> Iterator(World); Iterator; ++Iterator)
+		{
+			AHunterPropStart* HunterPropStart = *Iterator;
+			if (!IsValid(HunterPropStart) || HunterPropStart->GetStartRoleType() != RoleType) continue;
 
-		HunterPropStarts.Emplace(HunterPropStart);
+			HunterPropStarts.Emplace(HunterPropStart);
+		}	
+	}
+	
+}
+
+void AGameManager::SetGameFinishedWithResult(ERoleType WinningSide)
+{
+	SideWhichWon = WinningSide;
+
+	if (CurrentGamePhase != EGamePhase::Scoreboard)
+	{
+		CurrentGamePhase = EGamePhase::InGame;
+		OnTimerForPhaseEnded();
 	}
 }
+
 
 FTransform AGameManager::GetSpawnTransformFromPlayerStart(TArray<APlayerStart*>& PlayerStarts) const
 {
@@ -200,7 +259,7 @@ FTransform AGameManager::GetSpawnTransformFromPlayerStart(TArray<APlayerStart*>&
 	
 	if (PlayerStarts.IsEmpty())
 	{
-		GetPlayerStarts(PlayerStarts);
+		GetPlayerStarts(this, PlayerStarts);
 	}
 
 	if (!PlayerStarts.IsEmpty())
@@ -228,7 +287,7 @@ FTransform AGameManager::GetSpawnTransformFromHunterPropStart(ERoleType RoleType
 	
 	if (HunterPropStarts.IsEmpty())
 	{
-		GetHunterPropStartsOfType(RoleType, HunterPropStarts);
+		GetHunterPropStartsOfType(this, RoleType, HunterPropStarts);
 	}
 
 	if (!HunterPropStarts.IsEmpty())
@@ -297,6 +356,13 @@ void AGameManager::OnTimerForPhaseEnded()
 	}
 	else if (CurrentGamePhase == EGamePhase::InGame)
 	{
+		// This condition is only met if the in-game timer finishes without either side having won.
+		// By default, the props win; if the above condition is met, this means at least one prop is still alive.
+		if (SideWhichWon == ERoleType::Unknown)
+		{
+			SideWhichWon = ERoleType::Prop;
+		}
+		
 		CurrentGamePhase = EGamePhase::Scoreboard;
 		OnRep_CurrentGamePhase();
 		
@@ -307,6 +373,7 @@ void AGameManager::OnTimerForPhaseEnded()
 				if (AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(PlayerController); IsValid(GameController))
 				{
 					GameController->SetRoleType(ERoleType::Unknown);
+					GameController->DisplayScoreboardForDuration(SideWhichWon, UMultiplayerSettings::GetGamePhaseDuration(CurrentGamePhase));
 				}
 			}
 		}

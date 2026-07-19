@@ -3,14 +3,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Pawn.h"
+#include "GameFramework/SpectatorPawn.h"
 #include "MultiplayerSpectatorPawn.generated.h"
 
 class AMultiplayerGameCharacter;
 class UCameraComponent;
 
 UCLASS()
-class MULTIPLAYERPROJECT_API AMultiplayerSpectatorPawn : public APawn
+class MULTIPLAYERPROJECT_API AMultiplayerSpectatorPawn : public ASpectatorPawn
 {
 	GENERATED_BODY()
 #pragma region Components
@@ -29,6 +29,7 @@ public:
 	/**
 	 * Finds a new character to follow and follows it.
 	 */
+	UFUNCTION()
 	void SetFollowNewCharacter();
 
 protected:
@@ -44,5 +45,4 @@ protected:
 	UFUNCTION(Client, Reliable)
 	void OnClientFollowNewCharacter(AMultiplayerGameCharacter* CharacterToFollow);
 #pragma endregion Construction
-
 };

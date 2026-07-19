@@ -40,7 +40,11 @@ void ALobbyPawn::BeginPlay()
 
 void ALobbyPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	UUIManager::RemoveViewportWidget(this, EViewportWidget::Lobby);
+	if (IsLocallyControlled())
+	{
+		UUIManager::RemoveViewportWidget(this, EViewportWidget::Lobby);
+	}
+	
 	Super::EndPlay(EndPlayReason);
 }
 
