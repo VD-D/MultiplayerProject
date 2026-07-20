@@ -25,6 +25,11 @@ public:
 	 * Default constructor.
 	 */
 	APropCharacter();
+
+	/**
+	 * Binds delegates.
+	 */
+	virtual void BeginPlay() override;
 #pragma endregion Construction
 
 #pragma region Prop

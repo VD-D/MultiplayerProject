@@ -4,14 +4,15 @@
 #include "Core/Actors/MultiplayerGameController.h"
 
 /* Project includes. */
+#include "Core/Settings/MultiplayerSettings.h"
 #include "Shared/Libraries/Logging.h"
 #include "Shared/Subsystems/UIManager.h"
+#include "Shared/UI/ScoreboardWidget.h"
 
 /* Engine includes. */
 #include "EnhancedInputSubsystems.h"
-#include "Core/Settings/MultiplayerSettings.h"
-#include "GameFramework/PlayerState.h"
-#include "Shared/UI/ScoreboardWidget.h"
+#include "GameFramework/GameModeBase.h"
+#include "GameFramework/SpectatorPawn.h"
 
 void AMultiplayerGameController::BeginPlay()
 {
@@ -31,9 +32,36 @@ void AMultiplayerGameController::BeginPlay()
 
 void AMultiplayerGameController::SetSpectatorState()
 {
+	/*
 	if (IsValid(PlayerState)) PlayerState->SetIsSpectator(true);
 	ChangeState(NAME_Spectating);
 	ClientGotoState(NAME_Spectating);
+	*/
+
+	if (!HasAuthority() || !IsValid(GetWorld())) return;
+
+	if (const AGameModeBase* GameMode = GetWorld()->GetAuthGameMode())
+	{
+		FTransform SpectatorTransform = FTransform::Identity;
+
+		if (const APawn* CurrentPawn = GetPawn(); IsValid(CurrentPawn))
+		{
+			SpectatorTransform.SetLocation(CurrentPawn->GetActorLocation());
+			SpectatorTransform.SetRotation(FQuat(CurrentPawn->GetActorRotation()));
+		}
+		
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		
+		if (ASpectatorPawn* NewSpectatorPawn = GetWorld()->SpawnActor<ASpectatorPawn>(GameMode->SpectatorClass, SpectatorTransform, SpawnParameters); IsValid(NewSpectatorPawn))
+		{
+			Possess(NewSpectatorPawn);
+		}
+		else
+		{
+			ULogging::LogVerboseError(GetName(), "AMultiplayerGameController::SetSpectatorState", "Failed to spawn SpectatorPawn! (May be that Spectator class is invalid on GameMode)");
+		}
+	}
 }
 
 void AMultiplayerGameController::SetRoleType(ERoleType NewRole)

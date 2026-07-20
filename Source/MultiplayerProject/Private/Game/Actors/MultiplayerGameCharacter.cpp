@@ -150,6 +150,12 @@ void AMultiplayerGameCharacter::PossessedBy(AController* NewController)
 	OnCharacterPossessedClient();
 }
 
+void AMultiplayerGameCharacter::UnPossessed()
+{
+	Super::UnPossessed();
+	OnCharacterUnPossessedClient();
+}
+
 void AMultiplayerGameCharacter::OnCharacterPossessedClient_Implementation()
 {
 	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
@@ -174,6 +180,11 @@ void AMultiplayerGameCharacter::OnCharacterPossessedClient_Implementation()
 			WeakThis.Get()->OnRep_DisplayMaxHealth();
 		}
 	}));
+}
+
+void AMultiplayerGameCharacter::OnCharacterUnPossessedClient_Implementation()
+{
+	UUIManager::RemoveViewportWidget(this, EViewportWidget::GameHUD);
 }
 
 void AMultiplayerGameCharacter::TryInitHUDTimeFromGameManager()
@@ -367,6 +378,7 @@ void AMultiplayerGameCharacter::Die()
 	if (!HasAuthority()) return;
 
 	CharacterAnimationState = ECharacterAnimationState::Dead;
+	OnCharacterBeginDeath.Broadcast();
 
 	FTimerHandle TimerHandle;
 	FTimerDelegate TimerDelegate;
@@ -379,11 +391,16 @@ void AMultiplayerGameCharacter::OnDeathDelayFinished()
 {
 	if (!HasAuthority()) return;
 	
-	OnCharacterDeath.Broadcast();
+	OnCharacterEndDeath.Broadcast();
+	if (IsLocallyControlled())
+	{
+		UUIManager::RemoveViewportWidget(this, EViewportWidget::GameHUD);
+	}
 	
 	if (AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(GetController()); IsValid(GameController))
 	{
 		// DetachFromControllerPendingDestroy();
+		UE_LOG(LogTemp, Log, TEXT("Trying to set spectator state after death delay... RoleType = %s"), *UEnum::GetValueAsString(GameController->GetRoleType()));
 		GameController->SetSpectatorState();
 	}
 

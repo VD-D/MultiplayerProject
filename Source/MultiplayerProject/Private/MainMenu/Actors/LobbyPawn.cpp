@@ -40,11 +40,7 @@ void ALobbyPawn::BeginPlay()
 
 void ALobbyPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (IsLocallyControlled())
-	{
-		UUIManager::RemoveViewportWidget(this, EViewportWidget::Lobby);
-	}
-	
+	// UUIManager::RemoveViewportWidget(this, EViewportWidget::Lobby);
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -62,6 +58,12 @@ void ALobbyPawn::PossessedBy(AController* NewController)
 	}
 	
 	OnPossessedClient();
+}
+
+void ALobbyPawn::UnPossessed()
+{
+	Super::UnPossessed();
+	OnUnPossessedClient();
 }
 
 void ALobbyPawn::OnPossessedClient_Implementation()
@@ -88,6 +90,11 @@ void ALobbyPawn::OnPossessedClient_Implementation()
 			LobbyWidget->RefreshMaxNumPlayersDisplay(MaxNumPlayers);
 		}
 	}));
+}
+
+void ALobbyPawn::OnUnPossessedClient_Implementation()
+{
+	UUIManager::RemoveViewportWidget(this, EViewportWidget::Lobby);
 }
 
 void ALobbyPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

@@ -4,20 +4,20 @@
 #include "Game/Actors/GameManager.h"
 
 /* Project includes. */
+#include "Core/Actors/MultiplayerGameController.h"
+#include "Core/Actors/MultiplayerGameMode.h"
 #include "Core/Settings/MultiplayerSettings.h"
+#include "Game/Actors/HunterCharacter.h"
 #include "Game/Actors/HunterPropStart.h"
+#include "Game/Actors/PropCharacter.h"
 #include "Shared/Libraries/Logging.h"
 #include "Shared/Libraries/MultiplayerLibrary.h"
+#include "Shared/Subsystems/SessionSubsystem.h"
 
 /* Engine includes. */
 #include "EngineUtils.h"
-#include "Core/Actors/MultiplayerGameController.h"
-#include "Core/Actors/MultiplayerGameMode.h"
-#include "Game/Actors/HunterCharacter.h"
-#include "Game/Actors/PropCharacter.h"
 #include "GameFramework/PlayerStart.h"
 #include "Net/UnrealNetwork.h"
-#include "Shared/Subsystems/SessionSubsystem.h"
 
 AGameManager::AGameManager()
 {
@@ -45,15 +45,6 @@ AGameManager* AGameManager::CreateInstance(const UObject* WorldContextObject, TS
 void AGameManager::AssignRolesAndPossessControllers()
 {
 	if (!HasAuthority() || !IsValid(GetWorld())) return;
-
-	/*
-	AMultiplayerGameMode* MultiplayerGameMode = AMultiplayerGameMode::GetMultiplayerGameMode(this);
-	if (!IsValid(MultiplayerGameMode))
-	{
-		ULogging::LogVerboseError(GetName(), "AGameManager::AssignRolesAndPossessControllers", "Game mode is not of type AMultiplayerGameMode!");
-		return;
-	}
-	*/
 
 	// Step 0. Update game phase.
 	CurrentGamePhase = EGamePhase::GameCountdown;
@@ -119,22 +110,20 @@ void AGameManager::AssignRolesAndPossessControllers()
 		{
 			Index = 0;
 			CurrentRoleType = ERoleType::Prop;
+			HunterPropStarts.Empty();
 		}
 
 		const FTransform SpawnTransform = StartPreference == EStartPreference::CustomStarts ? GetSpawnTransformFromHunterPropStart(CurrentRoleType, HunterPropStarts) : GetSpawnTransformFromPlayerStart(PlayerStarts);
 		Index += 1;
-
-		UE_LOG(LogTemp, Log, TEXT("Trying to set new role (%s) ..."), *UEnum::GetValueAsString(CurrentRoleType));
+		
 		GameController->SetRoleType(CurrentRoleType);
-		// MultiplayerGameMode->RestartPlayer(GameController); //, SpawnTransform); 
-
 		
 		if (CurrentRoleType == ERoleType::Hunter)
 		{
 			if (AHunterCharacter* HunterCharacter = GetWorld()->SpawnActor<AHunterCharacter>(AMultiplayerGameMode::GetHunterCharacterClass(this), SpawnTransform, SpawnParameters); IsValid(HunterCharacter))
 			{
 				PlayerController->Possess(HunterCharacter);
-				// HunterCharacter->DisableInput(PlayerController); // We disable the input, since players should not be able to act until the start countdown timer expires
+				HunterCharacter->SetEnableCharacterInput(false);
 			}
 		}
 		else if (CurrentRoleType == ERoleType::Prop)
@@ -142,7 +131,6 @@ void AGameManager::AssignRolesAndPossessControllers()
 			if (APropCharacter* PropCharacter = GetWorld()->SpawnActor<APropCharacter>(AMultiplayerGameMode::GetPropCharacterClass(this), SpawnTransform, SpawnParameters); IsValid(PropCharacter))
 			{
 				PlayerController->Possess(PropCharacter);
-				// PropCharacter->DisableInput(PlayerController);
 			}
 		}
 	}
@@ -221,24 +209,26 @@ void AGameManager::GetPlayerStarts(const UObject* WorldContextObject, TArray<APl
 			PlayerStarts.Emplace(PlayerStart);
 		}
 	}
-	
 }
 
 void AGameManager::GetHunterPropStartsOfType(const UObject* WorldContextObject, ERoleType RoleType, TArray<AHunterPropStart*>& HunterPropStarts)
 {
 	HunterPropStarts.Empty();
+	
 	if (GEngine == nullptr) return;
 	if (const UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull); IsValid(World))
 	{
 		for (TActorIterator<AHunterPropStart> Iterator(World); Iterator; ++Iterator)
 		{
 			AHunterPropStart* HunterPropStart = *Iterator;
-			if (!IsValid(HunterPropStart) || HunterPropStart->GetStartRoleType() != RoleType) continue;
+			if (!IsValid(HunterPropStart)) continue;
 
-			HunterPropStarts.Emplace(HunterPropStart);
+			if (HunterPropStart->GetStartRoleType() == RoleType)
+			{
+				HunterPropStarts.Emplace(HunterPropStart);
+			}
 		}	
 	}
-	
 }
 
 void AGameManager::SetGameFinishedWithResult(ERoleType WinningSide)
@@ -251,7 +241,6 @@ void AGameManager::SetGameFinishedWithResult(ERoleType WinningSide)
 		OnTimerForPhaseEnded();
 	}
 }
-
 
 FTransform AGameManager::GetSpawnTransformFromPlayerStart(TArray<APlayerStart*>& PlayerStarts) const
 {
@@ -352,7 +341,13 @@ void AGameManager::OnTimerForPhaseEnded()
 		CurrentGamePhase = EGamePhase::InGame;
 		OnRep_CurrentGamePhase();
 
-		// UMultiplayerLibrary::SetInputEnabledOnAllControllers(this, true);
+		for (TActorIterator<AHunterCharacter> ActorIterator(GetWorld()); ActorIterator; ++ActorIterator)
+		{
+			AHunterCharacter* HunterCharacter = *ActorIterator;
+			if (!IsValid(HunterCharacter)) continue;
+
+			HunterCharacter->SetEnableCharacterInput(true);
+		}
 	}
 	else if (CurrentGamePhase == EGamePhase::InGame)
 	{
@@ -377,8 +372,6 @@ void AGameManager::OnTimerForPhaseEnded()
 				}
 			}
 		}
-
-		// UMultiplayerLibrary::SetInputEnabledOnAllControllers(this, false);
 	}
 	else
 	{

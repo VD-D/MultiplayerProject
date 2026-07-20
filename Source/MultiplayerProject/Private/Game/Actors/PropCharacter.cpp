@@ -19,6 +19,16 @@ APropCharacter::APropCharacter()
 	PropMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
+void APropCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (HasAuthority())
+	{
+		OnCharacterBeginDeath.AddDynamic(this, &APropCharacter::OnHit);
+	}
+}
+
 void APropCharacter::OnHit_Implementation()
 {
 	if (USkeletalMeshComponent* MeshComp = GetMesh())
@@ -84,6 +94,10 @@ void APropCharacter::OnCurrentHealthChanged(float NewValue, EHealthChangeType Ch
 		});
 		
 		GetWorldTimerManager().SetTimer(Handle, Delegate, DeathHoldTime, false);
+	}
+	else if (NewValue <= 0.0f && ChangeType == EHealthChangeType::Lost && HasAuthority())
+	{
+		OnHit();
 	}
 }
 

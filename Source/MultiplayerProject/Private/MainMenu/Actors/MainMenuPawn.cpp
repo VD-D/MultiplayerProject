@@ -9,6 +9,7 @@
 
 /* Engine includes. */
 #include "Camera/CameraComponent.h"
+#include "Shared/Subsystems/SessionSubsystem.h"
 
 AMainMenuPawn::AMainMenuPawn()
 {
@@ -19,9 +20,13 @@ AMainMenuPawn::AMainMenuPawn()
 void AMainMenuPawn::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
+	
 	if (APlayerController* PlayerController = Cast<APlayerController>(NewController))
 	{
 		UUIManager::LoadViewportWidget(this, EViewportWidget::MainMenu);
+
+		// Note: This is done as a fallback to ensure we have no active session if we were kicked from one (that may have not been destroyed).
+		USessionSubsystem::DestroySession(PlayerController);
 		
 		FInputModeUIOnly InputMode;
 		InputMode.SetLockMouseToViewportBehavior(UMultiplayerSettings::GetMouseLockMode());

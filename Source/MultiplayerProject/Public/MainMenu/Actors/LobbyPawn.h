@@ -58,11 +58,16 @@ protected:
 	 */
 	virtual void PossessedBy(AController* NewController) override;
 
+	virtual void UnPossessed() override;
+
 	/**
 	 * Configures UI for local client.
 	 */
 	UFUNCTION(Client, Reliable)
 	void OnPossessedClient();
+
+	UFUNCTION(Client, Reliable)
+	void OnUnPossessedClient();
 #pragma endregion Construction
 
 #pragma region Replication

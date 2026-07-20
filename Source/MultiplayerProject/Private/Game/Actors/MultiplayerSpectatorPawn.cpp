@@ -21,11 +21,11 @@ AMultiplayerSpectatorPawn::AMultiplayerSpectatorPawn()
 
 void AMultiplayerSpectatorPawn::SetFollowNewCharacter()
 {
-	if (!HasAuthority() || !IsLocallyControlled()) return;
+	if (!HasAuthority()) return;
 	
 	if (const AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(GetController()))
 	{
-		UE_LOG(LogTemp, Log, TEXT("SetFollowNewCharacter (current role type is %s)"), *UEnum::GetValueAsString(GameController->GetRoleType()));
+		UE_LOG(LogTemp, Log, TEXT("Trying to follow character (role type = %s)"), *UEnum::GetValueAsString(GameController->GetRoleType()));
 		
 		TArray<AMultiplayerGameCharacter*> GameCharacters;
 		if (GameController->GetRoleType() == ERoleType::Hunter)
@@ -51,15 +51,16 @@ void AMultiplayerSpectatorPawn::SetFollowNewCharacter()
 
 		if (GameCharacters.IsEmpty())
 		{
-			UE_LOG(LogTemp, Log, TEXT("Did not find character to follow"));
+			UE_LOG(LogTemp, Log, TEXT("Failed to find any characters to follow."));
 			OnClientFollowNewCharacter(nullptr);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Log, TEXT("Found character to follow"));
+			UE_LOG(LogTemp, Log, TEXT("Successfully found character to follow."));
 			
 			AMultiplayerGameCharacter* GameCharacter = GameCharacters[FMath::RandRange(0, GameCharacters.Num() - 1)];
-			GameCharacter->OnCharacterDeath.AddDynamic(this, &AMultiplayerSpectatorPawn::SetFollowNewCharacter); // NOTE: If the character we're following dies, follow a new one.
+			GameCharacter->OnCharacterEndDeath.AddDynamic(this, &AMultiplayerSpectatorPawn::SetFollowNewCharacter); // NOTE: If the character we're following dies, follow a new one.
+			//GameController->SetViewTargetWithBlend(GameCharacter, 0.2f);
 			OnClientFollowNewCharacter(GameCharacter);
 		}
 	}
@@ -78,9 +79,9 @@ void AMultiplayerSpectatorPawn::PossessedBy(AController* NewController)
 void AMultiplayerSpectatorPawn::OnClientFollowNewCharacter_Implementation(AMultiplayerGameCharacter* CharacterToFollow)
 {
 	if (!IsValid(CharacterToFollow)) return;
-	
-	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+
+	if (UCameraComponent* CameraComponent = CharacterToFollow->GetCameraComponent(); IsValid(CameraComponent))
 	{
-		PlayerController->SetViewTargetWithBlend(CharacterToFollow, 0.2f);
+		AttachToComponent(CameraComponent, FAttachmentTransformRules::SnapToTargetIncludingScale);
 	}
 }

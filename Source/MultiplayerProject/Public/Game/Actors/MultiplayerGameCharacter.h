@@ -61,7 +61,10 @@ class MULTIPLAYERPROJECT_API AMultiplayerGameCharacter : public ACharacter, publ
 #pragma region Delegates
 public:
 	UPROPERTY(BlueprintAssignable, Category = "Multiplayer Game Character")
-	FGenericDelegate OnCharacterDeath;
+	FGenericDelegate OnCharacterBeginDeath;
+	
+	UPROPERTY(BlueprintAssignable, Category = "Multiplayer Game Character")
+	FGenericDelegate OnCharacterEndDeath;
 #pragma endregion Delegates
 	
 #pragma region Components
@@ -169,8 +172,16 @@ protected:
 	 */
 	virtual void PossessedBy(AController* NewController) override;
 
+	/**
+	 * Removes UI on owning client.
+	 */
+	virtual void UnPossessed() override;
+
 	UFUNCTION(Client, Reliable)
 	void OnCharacterPossessedClient();
+
+	UFUNCTION(Client, Reliable)
+	void OnCharacterUnPossessedClient();
 
 	UFUNCTION()
 	void TryInitHUDTimeFromGameManager();
@@ -204,6 +215,18 @@ private:
 
 #pragma region Accessors
 public:
+	/**
+	 * @return Camera component of this character.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Game Character")
+	UCameraComponent* GetCameraComponent() const { return Camera; }
+
+	/**
+	 * @return Spring arm of this character.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Multiplayer Game Character")
+	USpringArmComponent* GetSpringArmComponent() const { return SpringArm; }
+	
 	/**
 	 * @return Target we are looking at. This is only valid on the local client.
 	 */
