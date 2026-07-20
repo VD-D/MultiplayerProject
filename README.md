@@ -5,8 +5,6 @@ This is a simple re-imagining of the Garry's Mod game Prop Hunt ([Steam Link](ht
 - Props have the ability to turn into arbitrary static meshes littered around the level (with a few exceptions). If hit by a Hunter's laser, they lose 1 health, briefly become invulnerable, then teleport to a random area.
 -  Hunters can fire a laser, which goes through all items until it hits a wall. If the laser does not hit a Prop character, the Hunter loses 1 health.
 
-<br></br>
-
 The game ends when any of the following conditions are met:
 
 - All Props reach 0 health (Hunters win).
@@ -47,3 +45,10 @@ The two most important settings are:
 - Integration into Steam and EoS.
 - I used GAS to implement player abilities - it should be fairly straightforward to add new abilities, as the underlying architecture is there.
 - Visual effects and spectator pawn behavior could be improved.
+
+## **Assets used**
+
+- [Robot Recon](https://www.fab.com/listings/6d3983f7-f988-4bff-a633-1b8609fe6ba8)
+- [Office Scene](https://www.fab.com/listings/c8ef3191-e74f-48a0-bcb8-fe2572286446)
+- [Backrooms Level](https://itch.io/queue/c/4935219/unreal-templates?game_id=2641321&password=)
+- (The level itself was my own amateur level design).
