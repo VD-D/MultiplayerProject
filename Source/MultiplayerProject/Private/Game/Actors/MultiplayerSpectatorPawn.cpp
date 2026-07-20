@@ -11,12 +11,22 @@
 
 /* Engine includes. */
 #include "EngineUtils.h"
+#include "EnhancedInputComponent.h"
 #include "Camera/CameraComponent.h"
+#include "GameFramework/SpringArmComponent.h"
 
 AMultiplayerSpectatorPawn::AMultiplayerSpectatorPawn()
 {
+	PawnRoot = CreateDefaultSubobject<USceneComponent>("PawnRoot");
+	RootComponent = PawnRoot;
+	
+	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("Spring Arm"));
+	SpringArm->SetupAttachment(PawnRoot);
+	SpringArm->TargetArmLength = 400.0f;
+	SpringArm->bUsePawnControlRotation = true;
+	
 	SpectatorCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("Spectator Camera"));
-	RootComponent = SpectatorCamera;
+	SpectatorCamera->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
 }
 
 void AMultiplayerSpectatorPawn::SetFollowNewCharacter()
@@ -25,8 +35,6 @@ void AMultiplayerSpectatorPawn::SetFollowNewCharacter()
 	
 	if (const AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(GetController()))
 	{
-		UE_LOG(LogTemp, Log, TEXT("Trying to follow character (role type = %s)"), *UEnum::GetValueAsString(GameController->GetRoleType()));
-		
 		TArray<AMultiplayerGameCharacter*> GameCharacters;
 		if (GameController->GetRoleType() == ERoleType::Hunter)
 		{
@@ -51,16 +59,12 @@ void AMultiplayerSpectatorPawn::SetFollowNewCharacter()
 
 		if (GameCharacters.IsEmpty())
 		{
-			UE_LOG(LogTemp, Log, TEXT("Failed to find any characters to follow."));
 			OnClientFollowNewCharacter(nullptr);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Log, TEXT("Successfully found character to follow."));
-			
 			AMultiplayerGameCharacter* GameCharacter = GameCharacters[FMath::RandRange(0, GameCharacters.Num() - 1)];
 			GameCharacter->OnCharacterEndDeath.AddDynamic(this, &AMultiplayerSpectatorPawn::SetFollowNewCharacter); // NOTE: If the character we're following dies, follow a new one.
-			//GameController->SetViewTargetWithBlend(GameCharacter, 0.2f);
 			OnClientFollowNewCharacter(GameCharacter);
 		}
 	}
@@ -70,18 +74,31 @@ void AMultiplayerSpectatorPawn::SetFollowNewCharacter()
 	}
 }
 
+void AMultiplayerSpectatorPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	if (UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(PlayerInputComponent))
+	{
+		Input->BindAction(MoveCamera, ETriggerEvent::Triggered, this, &AMultiplayerSpectatorPawn::CameraLook);
+	}
+}
+
 void AMultiplayerSpectatorPawn::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 	SetFollowNewCharacter();
 }
 
+void AMultiplayerSpectatorPawn::CameraLook(const FInputActionInstance& Instance)
+{
+	const FVector2D AxisValue = Instance.GetValue().Get<FVector2D>();
+	AddControllerYawInput(AxisValue.X);
+	AddControllerPitchInput(AxisValue.Y);
+}
+
 void AMultiplayerSpectatorPawn::OnClientFollowNewCharacter_Implementation(AMultiplayerGameCharacter* CharacterToFollow)
 {
 	if (!IsValid(CharacterToFollow)) return;
-
-	if (UCameraComponent* CameraComponent = CharacterToFollow->GetCameraComponent(); IsValid(CameraComponent))
-	{
-		AttachToComponent(CameraComponent, FAttachmentTransformRules::SnapToTargetIncludingScale);
-	}
+	AttachToActor(CharacterToFollow, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 }

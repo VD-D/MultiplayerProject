@@ -5,11 +5,11 @@
 
 /* Project includes. */
 #include "Core/Settings/MultiplayerSettings.h"
+#include "Shared/Subsystems/SessionSubsystem.h"
 #include "Shared/Subsystems/UIManager.h"
 
 /* Engine includes. */
 #include "Camera/CameraComponent.h"
-#include "Shared/Subsystems/SessionSubsystem.h"
 
 AMainMenuPawn::AMainMenuPawn()
 {

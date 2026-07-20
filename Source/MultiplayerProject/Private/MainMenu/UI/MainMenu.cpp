@@ -60,7 +60,7 @@ void UMainMenu::RefreshSessionsDisplayBox()
 		}
 	});
 	
-	// Noting here that in a real-world scenario, we require functionality to detect if we are not using LAN, e.g. using EOS or Steam. 
+	// Noting here that in a real-world scenario, we would require functionality to detect if we are not using LAN, e.g. using EOS or Steam. 
 	USessionSubsystem::FindSessions(UMultiplayerLibrary::GetLocalPlayerController(this), UMultiplayerSettings::GetNumSessionsToFindPerSearch(), true, true, OnSessionsFound);
 }
 

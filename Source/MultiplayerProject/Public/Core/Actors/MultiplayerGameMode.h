@@ -52,13 +52,6 @@ public:
 	 * Default constructor.
 	 */
 	AMultiplayerGameMode();
-
-	/**
-	 * Gets appropriate class for pawn.
-	 * @param Controller Cast to multiplayer game controller.
-	 * @return Hunter or prop class, or default if the role is neither.
-	 */
-	virtual UClass* GetDefaultPawnClassForController_Implementation(AController* Controller) override;
 #pragma endregion Construction
 
 #pragma region Accessors

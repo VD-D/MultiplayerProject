@@ -8,7 +8,7 @@
 #include "ScoreboardWidget.generated.h"
 
 /**
- * Endgame widget which is displayed when the match ends.
+ * Endgame widget which is displayed when the match ends. Blueprint only.
  */
 UCLASS()
 class MULTIPLAYERPROJECT_API UScoreboardWidget : public UUserWidget

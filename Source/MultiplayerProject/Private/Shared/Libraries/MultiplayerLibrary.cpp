@@ -41,28 +41,6 @@ int32 UMultiplayerLibrary::GetNumPlayers(const UObject* WorldContextObject)
 	return 0;
 }
 
-void UMultiplayerLibrary::SetInputEnabledOnAllControllers(const UObject* WorldContextObject, bool bEnable)
-{
-	if (GEngine == nullptr) return;
-
-	if (const UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull); IsValid(World))
-	{
-		for (FConstPlayerControllerIterator Iterator = World->GetPlayerControllerIterator(); Iterator; ++Iterator)
-		{
-			APlayerController* PlayerController = Iterator->Get();
-			if (!IsValid(PlayerController)) continue;
-
-			if (!PlayerController->HasAuthority()) break;
-
-			if (APawn* ControlledPawn = PlayerController->GetPawn(); IsValid(ControlledPawn))
-			{
-				if (bEnable) ControlledPawn->EnableInput(PlayerController);
-				else ControlledPawn->DisableInput(PlayerController);
-			}
-		}
-	}
-}
-
 void UMultiplayerLibrary::DisconnectLocalPlayer(const UObject* WorldContextObject)
 {
 	if (APlayerController* LocalController = GetLocalPlayerController(WorldContextObject); IsValid(LocalController))

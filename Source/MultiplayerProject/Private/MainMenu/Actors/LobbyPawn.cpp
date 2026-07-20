@@ -24,6 +24,11 @@ ALobbyPawn::ALobbyPawn()
 	RootComponent = Camera;
 }
 
+void ALobbyPawn::RemoveUILocal_Implementation()
+{
+	UUIManager::RemoveViewportWidget(this, EViewportWidget::Lobby);
+}
+
 void ALobbyPawn::BeginPlay()
 {
 	Super::BeginPlay();
@@ -40,7 +45,6 @@ void ALobbyPawn::BeginPlay()
 
 void ALobbyPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// UUIManager::RemoveViewportWidget(this, EViewportWidget::Lobby);
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -63,7 +67,7 @@ void ALobbyPawn::PossessedBy(AController* NewController)
 void ALobbyPawn::UnPossessed()
 {
 	Super::UnPossessed();
-	OnUnPossessedClient();
+	RemoveUILocal();
 }
 
 void ALobbyPawn::OnPossessedClient_Implementation()
@@ -90,11 +94,6 @@ void ALobbyPawn::OnPossessedClient_Implementation()
 			LobbyWidget->RefreshMaxNumPlayersDisplay(MaxNumPlayers);
 		}
 	}));
-}
-
-void ALobbyPawn::OnUnPossessedClient_Implementation()
-{
-	UUIManager::RemoveViewportWidget(this, EViewportWidget::Lobby);
 }
 
 void ALobbyPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

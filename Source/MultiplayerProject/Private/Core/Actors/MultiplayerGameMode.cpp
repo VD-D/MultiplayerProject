@@ -4,8 +4,6 @@
 #include "Core/Actors/MultiplayerGameMode.h"
 
 /* Project includes. */
-#include "Core/Actors/MultiplayerGameController.h"
-#include "Core/Actors/MultiplayerGameState.h"
 #include "Game/Actors/GameManager.h"
 #include "Game/Actors/HunterCharacter.h"
 #include "Game/Actors/PropCharacter.h"
@@ -20,17 +18,6 @@
 AMultiplayerGameMode::AMultiplayerGameMode()
 {
 	bUseSeamlessTravel = true;
-}
-
-UClass* AMultiplayerGameMode::GetDefaultPawnClassForController_Implementation(AController* Controller)
-{
-	if (const AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(Controller))
-	{
-		if (GameController->GetRoleType() == ERoleType::Hunter) return HunterCharacterClass;
-		if (GameController->GetRoleType() == ERoleType::Prop) return PropCharacterClass;
-	}
-
-	return DefaultPawnClass;
 }
 
 AMultiplayerGameMode* AMultiplayerGameMode::GetMultiplayerGameMode(const UObject* WorldContextObject)

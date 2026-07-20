@@ -14,6 +14,7 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "MainMenu/Actors/LobbyPawn.h"
 
 void ULobbyWidget::RefreshPlayerList(const TArray<FString>& PlayerNames)
 {
@@ -88,6 +89,18 @@ void ULobbyWidget::OnStartGameButtonClicked()
 	{
 		if (const AMultiplayerGameMode* MultiplayerGameMode = AMultiplayerGameMode::GetMultiplayerGameMode(this))
 		{
+			// Noting if game mode is valid, this is the server
+			for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
+			{
+				const APlayerController* PlayerController = Iterator->Get();
+				if (!IsValid(PlayerController)) continue;
+
+				if (ALobbyPawn* LobbyPawn = Cast<ALobbyPawn>(PlayerController->GetPawn()); IsValid(LobbyPawn))
+				{
+					LobbyPawn->RemoveUILocal();
+				}
+			}
+			
 			MultiplayerGameMode->SeverTravelToGameLevel();
 		}
 		else

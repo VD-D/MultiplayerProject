@@ -7,6 +7,7 @@
 #include "MainMenuPawn.generated.h"
 
 class UCameraComponent;
+
 /**
  * Pawn which configures main menu.
  */

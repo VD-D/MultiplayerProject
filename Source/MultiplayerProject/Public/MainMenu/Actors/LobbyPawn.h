@@ -40,6 +40,12 @@ public:
 	 */
 	ALobbyPawn();
 
+	/**
+	 * Removes lobby UI.
+	 */
+	UFUNCTION(Client, Reliable)
+	void RemoveUILocal();
+
 protected:
 	/**
 	 * Configures delegates.
@@ -58,6 +64,9 @@ protected:
 	 */
 	virtual void PossessedBy(AController* NewController) override;
 
+	/**
+	 * Removes UI from local client.
+	 */
 	virtual void UnPossessed() override;
 
 	/**
@@ -65,9 +74,6 @@ protected:
 	 */
 	UFUNCTION(Client, Reliable)
 	void OnPossessedClient();
-
-	UFUNCTION(Client, Reliable)
-	void OnUnPossessedClient();
 #pragma endregion Construction
 
 #pragma region Replication

@@ -14,7 +14,6 @@ class UGameplayAbility;
 class UGameplayEffect;
 class UInputAction;
 class UInputComponent;
-class UInputMappingContext;
 class USpringArmComponent;
 
 struct FInputActionInstance;
@@ -156,11 +155,6 @@ public:
 
 protected:
 	/**
-	 * TODO: Is BeginPlay needed?
-	 */
-	virtual void BeginPlay() override;
-
-	/**
 	 * Removes GameHUD from viewport.
 	 * @param EndPlayReason Unused.
 	 */
@@ -203,12 +197,16 @@ private:
 	void MovementInput(const FInputActionInstance& Instance);
 
 	/**
-	 * Attempts to interact with whatever is at the top of the interact stack.
-	 * @param Instance Unused.
+	 * Moves camera.
+	 * @param Instance Should be a vector 2D.
 	 */
 	UFUNCTION()
 	void CameraLook(const FInputActionInstance& Instance);
 
+	/**
+	 * Activates the gameplay ability at the given input ID
+	 * @param InputID ID of the gameplay ability.
+	 */
 	UFUNCTION()
 	void OnAbilityInputPressed(int32 InputID);
 #pragma endregion Input
@@ -327,28 +325,17 @@ private:
 #pragma region CharacterAPI
 protected:
 	/**
-	 * Called after the death delay.
-	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "Multiplayer Game Character")
-	void PostDeath();
-	virtual void PostDeath_Implementation() {}
-	
-	/**
 	 * Callback each current health changes.
 	 * @param NewValue New health value.
 	 * @param ChangeType Whether this value is greater (increased), the same (unchanged) or lower (lost) than previous.
 	 */
-	// UFUNCTION(BlueprintImplementableEvent, Category = "Multiplayer Game Character")
 	virtual void OnCurrentHealthChanged(float NewValue, EHealthChangeType ChangeType) {}
-	// virtual void OnCurrentHealthChanged_Implementation(float NewValue, EHealthChangeType ChangeType) {}
 
 	/**
 	 * Callback each time max health changes.
 	 * @param NewValue New health value.
 	 * @param ChangeType Whether this value is greater (increased), the same (unchanged) or lower (lost) than previous.
 	 */
-	//UFUNCTION(BlueprintImplementableEvent, Category = "Multiplayer Game Character")
 	virtual void OnMaxHealthChanged(float NewValue, EHealthChangeType ChangeType) {}
-	//virtual void OnMaxHealthChanged_Implementation(float NewValue, EHealthChangeType ChangeType) {}
 #pragma endregion CharacterAPI
 };

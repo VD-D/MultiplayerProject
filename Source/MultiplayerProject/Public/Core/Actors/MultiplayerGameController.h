@@ -7,8 +7,6 @@
 #include "Shared/Types/SharedEnums.h"
 #include "MultiplayerGameController.generated.h"
 
-struct FInputActionInstance;
-class UInputAction;
 class UInputMappingContext;
 
 /**
@@ -23,7 +21,8 @@ protected:
 	/* Mapping Context for player input. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Multiplayer Character")
 	TObjectPtr<UInputMappingContext> InputMappingContext;
-	
+
+	/* This controller's current role type. */
 	ERoleType CurrentRole = ERoleType::Unknown;
 #pragma endregion Config
 
@@ -45,7 +44,7 @@ public:
 	ERoleType GetRoleType() const { return CurrentRole; }
 
 	UFUNCTION(BlueprintCallable, Category = "Multiplayer Game Controller")
-	void SetRoleType(ERoleType NewRole); // {  }
+	void SetRoleType(ERoleType NewRole);
 #pragma endregion Accessors
 
 #pragma region Scoreboard

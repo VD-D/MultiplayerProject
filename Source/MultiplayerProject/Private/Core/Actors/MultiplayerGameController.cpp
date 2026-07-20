@@ -32,12 +32,6 @@ void AMultiplayerGameController::BeginPlay()
 
 void AMultiplayerGameController::SetSpectatorState()
 {
-	/*
-	if (IsValid(PlayerState)) PlayerState->SetIsSpectator(true);
-	ChangeState(NAME_Spectating);
-	ClientGotoState(NAME_Spectating);
-	*/
-
 	if (!HasAuthority() || !IsValid(GetWorld())) return;
 
 	if (const AGameModeBase* GameMode = GetWorld()->GetAuthGameMode())

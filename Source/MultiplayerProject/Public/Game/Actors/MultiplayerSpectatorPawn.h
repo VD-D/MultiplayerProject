@@ -8,6 +8,10 @@
 
 class AMultiplayerGameCharacter;
 class UCameraComponent;
+class UInputAction;
+class USpringArmComponent;
+
+struct FInputActionInstance;
 
 UCLASS()
 class MULTIPLAYERPROJECT_API AMultiplayerSpectatorPawn : public ASpectatorPawn
@@ -16,8 +20,19 @@ class MULTIPLAYERPROJECT_API AMultiplayerSpectatorPawn : public ASpectatorPawn
 #pragma region Components
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	UCameraComponent* SpectatorCamera;
+	TObjectPtr<USceneComponent> PawnRoot;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<USpringArmComponent> SpringArm;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UCameraComponent> SpectatorCamera;
 #pragma endregion Components
+
+#pragma region Config
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
+	TObjectPtr<UInputAction> MoveCamera;
+#pragma endregion Config
 
 #pragma region Construction
 public:
@@ -32,6 +47,12 @@ public:
 	UFUNCTION()
 	void SetFollowNewCharacter();
 
+	/**
+	 * Configures camera movement.
+	 * @param PlayerInputComponent Component to bind to.
+	 */
+	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+
 protected:
 	/**
 	 * Configures which pawn this spectator will follow.
@@ -44,5 +65,12 @@ protected:
 	 */
 	UFUNCTION(Client, Reliable)
 	void OnClientFollowNewCharacter(AMultiplayerGameCharacter* CharacterToFollow);
+
+	/**
+	 * Moves camera.
+	 * @param Instance Should be a vector 2D.
+	 */
+	UFUNCTION()
+	void CameraLook(const FInputActionInstance& Instance);
 #pragma endregion Construction
 };

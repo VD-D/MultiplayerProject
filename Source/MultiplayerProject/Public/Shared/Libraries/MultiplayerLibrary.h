@@ -32,13 +32,9 @@ public:
 	static int32 GetNumPlayers(const UObject* WorldContextObject);
 
 	/**
-	 * This function only works on the server. Enables/disables input on all controllers.
+	 * Forces local player to disconnect.
 	 * @param WorldContextObject Gets world.
-	 * @param bEnable True to enable input, false to disable it.
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Multiplayer", meta = (WorldContext = "WorldContextObject"))
-	static void SetInputEnabledOnAllControllers(const UObject* WorldContextObject, bool bEnable);
-
 	static void DisconnectLocalPlayer(const UObject* WorldContextObject);
 #pragma endregion Library
 };

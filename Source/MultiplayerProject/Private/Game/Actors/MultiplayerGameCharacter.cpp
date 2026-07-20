@@ -4,6 +4,7 @@
 #include "Game/Actors/MultiplayerGameCharacter.h"
 
 /* Project includes. */
+#include "Core/Actors/MultiplayerGameController.h"
 #include "Core/Settings/MultiplayerSettings.h"
 #include "Game/Actors/GameManager.h"
 #include "Game/GameplayAbilities/HealthAttributeSet.h"
@@ -16,7 +17,6 @@
 #include "EnhancedInputComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "Core/Actors/MultiplayerGameController.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Net/UnrealNetwork.h"
@@ -94,11 +94,6 @@ void AMultiplayerGameCharacter::Tick(float DeltaTime)
 		DoTargeting(OutHit);
 		SetTargetLocal(OutHit);
 	}
-}
-
-void AMultiplayerGameCharacter::BeginPlay()
-{
-	Super::BeginPlay();
 }
 
 void AMultiplayerGameCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -184,7 +179,10 @@ void AMultiplayerGameCharacter::OnCharacterPossessedClient_Implementation()
 
 void AMultiplayerGameCharacter::OnCharacterUnPossessedClient_Implementation()
 {
-	UUIManager::RemoveViewportWidget(this, EViewportWidget::GameHUD);
+	if (IsLocallyControlled())
+	{
+		UUIManager::RemoveViewportWidget(this, EViewportWidget::GameHUD);
+	}
 }
 
 void AMultiplayerGameCharacter::TryInitHUDTimeFromGameManager()
@@ -399,12 +397,9 @@ void AMultiplayerGameCharacter::OnDeathDelayFinished()
 	
 	if (AMultiplayerGameController* GameController = Cast<AMultiplayerGameController>(GetController()); IsValid(GameController))
 	{
-		// DetachFromControllerPendingDestroy();
-		UE_LOG(LogTemp, Log, TEXT("Trying to set spectator state after death delay... RoleType = %s"), *UEnum::GetValueAsString(GameController->GetRoleType()));
 		GameController->SetSpectatorState();
 	}
-
-	// PostDeath();
+	
 	AGameManager::CheckGameFinished(this);
 	Destroy();
 }
